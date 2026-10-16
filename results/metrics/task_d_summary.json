@@ -1,0 +1,272 @@
+{
+  "D1_prompt_5shot": {
+    "dev": {
+      "num_documents": 2369,
+      "string_multiset_category_polarity": {
+        "tp": 675,
+        "fp": 473,
+        "fn": 705,
+        "precision": 0.587979094076655,
+        "recall": 0.4891304347826087,
+        "f1": 0.5340189873417721
+      },
+      "string_multiset_category_only": {
+        "tp": 678,
+        "fp": 470,
+        "fn": 702,
+        "precision": 0.5905923344947736,
+        "recall": 0.49130434782608695,
+        "f1": 0.5363924050632911
+      },
+      "span_explicit_exact": {
+        "tp": 662,
+        "fp": 486,
+        "fn": 718,
+        "precision": 0.5766550522648084,
+        "recall": 0.4797101449275362,
+        "f1": 0.5237341772151898
+      },
+      "span_explicit_overlap": {
+        "tp": 667,
+        "fp": 481,
+        "fn": 713,
+        "precision": 0.5810104529616724,
+        "recall": 0.48333333333333334,
+        "f1": 0.5276898734177214
+      },
+      "span_explicit_exact_java_compat": {
+        "num_entries": 1569,
+        "tp_sum": 662,
+        "fp_sum": 907,
+        "fn_sum": 907,
+        "micro_f1": 0.4219247928616954
+      },
+      "span_explicit_overlap_java_compat": {
+        "num_entries": 1564,
+        "tp_sum": 667,
+        "fp_sum": 897,
+        "fn_sum": 897,
+        "micro_f1": 0.4264705882352941
+      },
+      "alignment_breakdown": {
+        "total_predicted_targets": 1148,
+        "counts": {
+          "unique_contiguous": 955,
+          "ambiguous_contiguous": 185,
+          "discontinuous_star": 8
+        },
+        "rates": {
+          "unique_contiguous": 0.8318815331010453,
+          "ambiguous_contiguous": 0.16114982578397213,
+          "discontinuous_star": 0.006968641114982578
+        }
+      },
+      "official_jar_explicit_gold_ote": {
+        "exact_micro_f1": 0.4219247928616954,
+        "overlap_micro_f1": 0.42921204356181936
+      }
+    },
+    "test_syn": {
+      "num_documents": 2566,
+      "string_multiset_category_polarity": {
+        "tp": 1104,
+        "fp": 552,
+        "fn": 1058,
+        "precision": 0.6666666666666666,
+        "recall": 0.5106382978723404,
+        "f1": 0.5783132530120482
+      },
+      "string_multiset_category_only": {
+        "tp": 1112,
+        "fp": 544,
+        "fn": 1050,
+        "precision": 0.6714975845410628,
+        "recall": 0.5143385753931545,
+        "f1": 0.5825039287585123
+      },
+      "span_explicit_exact": {
+        "tp": 1081,
+        "fp": 575,
+        "fn": 1081,
+        "precision": 0.6527777777777778,
+        "recall": 0.5,
+        "f1": 0.5662650602409639
+      },
+      "span_explicit_overlap": {
+        "tp": 1089,
+        "fp": 567,
+        "fn": 1073,
+        "precision": 0.657608695652174,
+        "recall": 0.503700277520814,
+        "f1": 0.5704557359874279
+      },
+      "span_explicit_exact_java_compat": {
+        "num_entries": 2431,
+        "tp_sum": 1081,
+        "fp_sum": 1350,
+        "fn_sum": 1350,
+        "micro_f1": 0.44467297408473877
+      },
+      "span_explicit_overlap_java_compat": {
+        "num_entries": 2423,
+        "tp_sum": 1089,
+        "fp_sum": 1334,
+        "fn_sum": 1334,
+        "micro_f1": 0.44944283945522084
+      },
+      "alignment_breakdown": {
+        "total_predicted_targets": 1656,
+        "counts": {
+          "ambiguous_contiguous": 341,
+          "unique_contiguous": 1305,
+          "discontinuous_star": 10
+        },
+        "rates": {
+          "ambiguous_contiguous": 0.20591787439613526,
+          "unique_contiguous": 0.7880434782608695,
+          "discontinuous_star": 0.006038647342995169
+        }
+      },
+      "official_jar_explicit_gold_ote": {
+        "exact_micro_f1": 0.44467297408473877,
+        "overlap_micro_f1": 0.44944283945522084
+      }
+    }
+  },
+  "D2_qlora_r16": {
+    "dev": {
+      "num_documents": 2369,
+      "string_multiset_category_polarity": {
+        "tp": 984,
+        "fp": 166,
+        "fn": 396,
+        "precision": 0.8556521739130435,
+        "recall": 0.7130434782608696,
+        "f1": 0.7778656126482214
+      },
+      "string_multiset_category_only": {
+        "tp": 985,
+        "fp": 165,
+        "fn": 395,
+        "precision": 0.8565217391304348,
+        "recall": 0.7137681159420289,
+        "f1": 0.7786561264822134
+      },
+      "span_explicit_exact": {
+        "tp": 956,
+        "fp": 194,
+        "fn": 424,
+        "precision": 0.831304347826087,
+        "recall": 0.6927536231884058,
+        "f1": 0.7557312252964427
+      },
+      "span_explicit_overlap": {
+        "tp": 961,
+        "fp": 189,
+        "fn": 419,
+        "precision": 0.8356521739130435,
+        "recall": 0.696376811594203,
+        "f1": 0.7596837944664031
+      },
+      "span_explicit_exact_java_compat": {
+        "num_entries": 1484,
+        "tp_sum": 956,
+        "fp_sum": 528,
+        "fn_sum": 528,
+        "micro_f1": 0.6442048517520216
+      },
+      "span_explicit_overlap_java_compat": {
+        "num_entries": 1479,
+        "tp_sum": 961,
+        "fp_sum": 518,
+        "fn_sum": 518,
+        "micro_f1": 0.649763353617309
+      },
+      "alignment_breakdown": {
+        "total_predicted_targets": 1150,
+        "counts": {
+          "unique_contiguous": 923,
+          "ambiguous_contiguous": 175,
+          "discontinuous_star": 51,
+          "unaligned": 1
+        },
+        "rates": {
+          "unique_contiguous": 0.802608695652174,
+          "ambiguous_contiguous": 0.15217391304347827,
+          "discontinuous_star": 0.04434782608695652,
+          "unaligned": 0.0008695652173913044
+        }
+      },
+      "official_jar_explicit_gold_ote": {
+        "exact_micro_f1": 0.6442048517520216,
+        "overlap_micro_f1": 0.649763353617309
+      }
+    },
+    "test_syn": {
+      "num_documents": 2566,
+      "string_multiset_category_polarity": {
+        "tp": 1543,
+        "fp": 227,
+        "fn": 619,
+        "precision": 0.8717514124293785,
+        "recall": 0.713691026827012,
+        "f1": 0.7848423194303153
+      },
+      "string_multiset_category_only": {
+        "tp": 1543,
+        "fp": 227,
+        "fn": 619,
+        "precision": 0.8717514124293785,
+        "recall": 0.713691026827012,
+        "f1": 0.7848423194303153
+      },
+      "span_explicit_exact": {
+        "tp": 1498,
+        "fp": 272,
+        "fn": 664,
+        "precision": 0.8463276836158192,
+        "recall": 0.692876965772433,
+        "f1": 0.7619532044760935
+      },
+      "span_explicit_overlap": {
+        "tp": 1500,
+        "fp": 270,
+        "fn": 662,
+        "precision": 0.847457627118644,
+        "recall": 0.6938020351526365,
+        "f1": 0.762970498474059
+      },
+      "span_explicit_exact_java_compat": {
+        "num_entries": 2304,
+        "tp_sum": 1498,
+        "fp_sum": 806,
+        "fn_sum": 806,
+        "micro_f1": 0.6501736111111112
+      },
+      "span_explicit_overlap_java_compat": {
+        "num_entries": 2302,
+        "tp_sum": 1500,
+        "fp_sum": 802,
+        "fn_sum": 802,
+        "micro_f1": 0.6516072980017377
+      },
+      "alignment_breakdown": {
+        "total_predicted_targets": 1770,
+        "counts": {
+          "ambiguous_contiguous": 342,
+          "unique_contiguous": 1373,
+          "discontinuous_star": 55
+        },
+        "rates": {
+          "ambiguous_contiguous": 0.19322033898305085,
+          "unique_contiguous": 0.7757062146892655,
+          "discontinuous_star": 0.031073446327683617
+        }
+      },
+      "official_jar_explicit_gold_ote": {
+        "exact_micro_f1": 0.6501736111111112,
+        "overlap_micro_f1": 0.6516072980017377
+      }
+    }
+  }
+}

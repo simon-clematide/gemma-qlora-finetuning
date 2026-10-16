@@ -1,0 +1,41 @@
+dataset_name: "GermEval 2017 ABSA"
+license: "CC BY-NC 2.0"
+source_repo: "https://github.com/simon-clematide/konvens-2018-german-absa"
+
+splits:
+  train:
+    xml_path: "data/raw/train_v1.4.xml"
+    canonical_path: "data/canonical/train.jsonl"
+    task_c_path: "data/derived/task_c/train.jsonl"
+    task_d_path: "data/derived/task_d/train.jsonl"
+    apply_typo_patches: true
+  dev:
+    xml_path: "data/raw/dev_v1.4.xml"
+    canonical_path: "data/canonical/dev.jsonl"
+    task_c_path: "data/derived/task_c/dev.jsonl"
+    task_d_path: "data/derived/task_d/dev.jsonl"
+    apply_typo_patches: false
+  test_syn:
+    xml_path: "data/raw/test_TIMESTAMP1.xml"
+    tsv_path: "data/raw/test_TIMESTAMP1.tsv"
+    canonical_path: "data/canonical/test_syn.jsonl"
+    task_c_path: "data/derived/task_c/test_syn.jsonl"
+    task_d_path: "data/derived/task_d/test_syn.jsonl"
+    apply_typo_patches: false
+  test_dia:
+    xml_path: "data/raw/test_TIMESTAMP2.xml"
+    tsv_path: "data/raw/test_TIMESTAMP2.tsv"
+    canonical_path: "data/canonical/test_dia.jsonl"
+    task_c_path: "data/derived/task_c/test_dia.jsonl"
+    task_d_path: "data/derived/task_d/test_dia.jsonl"
+    apply_typo_patches: false
+
+# Explicit, versioned patch policy applied ONLY when deriving training views (never mutating canonical data)
+typo_patches:
+  polarity_map:
+    "positve": "positive"
+    " negative": "negative"
+  category_full_map:
+    "Sichaupt": "Sicherheit#Haupt"
+  category_main_map:
+    "Sichaupt": "Sicherheit"

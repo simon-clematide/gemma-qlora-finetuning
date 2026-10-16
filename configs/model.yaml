@@ -1,0 +1,15 @@
+base_model_id: "google/gemma-2-2b-it"
+alternate_model_id: "google/gemma-3-4b-it"
+base_model_revision: "main"
+chat_template_roles:
+  user: "user"
+  assistant: "model"
+  supports_system_role: false
+response_template_marker: "<start_of_turn>model\n"
+end_of_turn_marker: "<end_of_turn>"
+
+generation:
+  do_sample: false
+  max_new_tokens: 256
+  temperature: null
+  top_p: null

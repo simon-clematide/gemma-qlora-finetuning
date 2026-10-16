@@ -1,0 +1,75 @@
+experiments:
+  P0:
+    task: "C"
+    method: "prompt_zero_shot_minimal"
+    prompt_key: "p0_minimal"
+    n_shots: 0
+  P1:
+    task: "C"
+    method: "prompt_zero_shot_guidelines"
+    prompt_key: "p1_guidelines"
+    n_shots: 0
+  P2_2shot:
+    task: "C"
+    method: "prompt_few_shot"
+    prompt_key: "p1_guidelines"
+    n_shots: 2
+    seed: 42
+  P2_5shot:
+    task: "C"
+    method: "prompt_few_shot"
+    prompt_key: "p1_guidelines"
+    n_shots: 5
+    seed: 42
+  P2_10shot:
+    task: "C"
+    method: "prompt_few_shot"
+    prompt_key: "p1_guidelines"
+    n_shots: 10
+    seed: 42
+  P3:
+    task: "C"
+    method: "prompt_dev_selected"
+    prompt_key: "p1_guidelines"
+    n_shots: 10
+    selection: "stratified_diverse"
+    seed: 42
+  L1:
+    task: "C"
+    method: "lora"
+    config: "configs/lora.yaml"
+    seed: 42
+  Q1:
+    task: "C"
+    method: "qlora"
+    config: "configs/qlora.yaml"
+    seed: 42
+  Q2:
+    task: "C"
+    method: "qlora_learning_curve"
+    config: "configs/qlora.yaml"
+    subset_sizes: [100, 250, 500, 1000, 2000, 4000, 19432]
+    sampling_strategies: ["uniform", "stratified"]
+    seeds: [42, 100, 2026]
+  Q3:
+    task: "C"
+    method: "qlora_rank_ablation"
+    config: "configs/qlora.yaml"
+    ranks: [8, 16, 32]
+    seed: 42
+  D1:
+    task: "D"
+    method: "prompt_task_d"
+    prompt_key: "d1_guidelines"
+    n_shots: 5
+    seed: 42
+  D2:
+    task: "D"
+    method: "qlora_task_d"
+    config: "configs/qlora.yaml"
+    seed: 42
+  J1:
+    task: "CD"
+    method: "qlora_joint_cd"
+    config: "configs/qlora.yaml"
+    seed: 42

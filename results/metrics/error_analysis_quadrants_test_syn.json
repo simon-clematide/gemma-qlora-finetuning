@@ -1,0 +1,140 @@
+{
+  "total_documents": 2566,
+  "both_correct": 1209,
+  "qlora_only_correct": 722,
+  "prompt_only_correct": 331,
+  "neither_correct": 304,
+  "rates": {
+    "both_correct": 0.4711613406079501,
+    "qlora_only_correct": 0.2813717848791894,
+    "prompt_only_correct": 0.1289945440374123,
+    "neither_correct": 0.11847233047544817
+  },
+  "sample_qlora_wins": [
+    {
+      "doc_id": "http://www.msn.com/de-de/wetter/topgeschichten/unwetter-bilanz-65255-blitze-in-24-stunden-%c3%bcber-nrw/ar-AAcBBsA",
+      "text": "Unwetter-Bilanz: 65.255 Blitze in 24 Stunden über NRW mit Ausfällen und Beeinträchtigungen rechnen. Umstürzende Bäume hatten der Bahn zufolge an vielen Orten di",
+      "gold": [
+        "Sonstige_Unregelmässigkeiten:negative"
+      ],
+      "prompt_pred": [],
+      "qlora_pred": [
+        "Sonstige_Unregelmässigkeiten:negative"
+      ]
+    },
+    {
+      "doc_id": "http://www.facebook.com/152033178165965/posts/856977564338186#152033178165965\\_856977564338186",
+      "text": "Re: DB Bahn Sitzt man bei der Bahn heute gemeinschaftlich in der Eisdiele oder nennt sich das Arbeit, was in NRW zurzeit praktiziert wird?",
+      "gold": [
+        "Allgemein:negative"
+      ],
+      "prompt_pred": [
+        "Allgemein:negative",
+        "Zugfahrt:negative"
+      ],
+      "qlora_pred": [
+        "Allgemein:negative"
+      ]
+    },
+    {
+      "doc_id": "http://www.gutefrage.net/frage/welcher-fagrkarte-fuer-2-wochen-kaufen#question-47517899",
+      "text": "welcher Fagrkarte für 2 Wochen kaufen? Guten Tag, Ich habe eine Frage, Ich bin Schüler und Ich muss 2 Wochen lang von 21271 Hanstedt mit dem bus nach Buchholz N",
+      "gold": [
+        "Ticketkauf:neutral"
+      ],
+      "prompt_pred": [
+        "Gepäck:neutral",
+        "Ticketkauf:neutral"
+      ],
+      "qlora_pred": [
+        "Ticketkauf:neutral"
+      ]
+    },
+    {
+      "doc_id": "http://www.morgenweb.de/nachrichten/sudwest/stuttgart-21-polizeieinsatz-war-rechtswidrig-1.2524968",
+      "text": "Stuttgart-21-Polizeieinsatz war rechtswidrig | Südwest Stuttgart-21-Polizeieinsatz war rechtswidrig Fünf Jahre nach dem rüden Polizeieinsatz mit Wasserwerfen ge",
+      "gold": [
+        "Allgemein:neutral"
+      ],
+      "prompt_pred": [],
+      "qlora_pred": [
+        "Allgemein:neutral"
+      ]
+    },
+    {
+      "doc_id": "http://www.fnweb.de/region/baubeginn-mit-hindernissen-1.2329425",
+      "text": "Baubeginn mit Hindernissen \" gewinnen. Würzner betonte die Wirtschaftlichkeit des Mobilitätsnetzes und stellte den Nutzen für die Pendler und den Umweltschutz h",
+      "gold": [
+        "Allgemein:positive"
+      ],
+      "prompt_pred": [
+        "Allgemein:positive",
+        "Sonstige_Unregelmässigkeiten:positive"
+      ],
+      "qlora_pred": [
+        "Allgemein:positive"
+      ]
+    }
+  ],
+  "sample_prompt_wins": [
+    {
+      "doc_id": "http://twitter.com/02dilemaRD/statuses/600583497380573184",
+      "text": "Streik der GDL: Bahn will Streik in letzter Minute verhindern: ...",
+      "gold": [
+        "Allgemein:negative"
+      ],
+      "prompt_pred": [
+        "Allgemein:negative"
+      ],
+      "qlora_pred": []
+    },
+    {
+      "doc_id": "http://twitter.com/DerFiXx/statuses/672933068064313344",
+      "text": "Ich habe ein @YouTube-Video von @tilletv positiv bewertet: https://t.co/azLa27Pdb6 NACHTS in S-BAHN AUFGEWACHT [HD+] Tillevision",
+      "gold": [
+        "Allgemein:neutral"
+      ],
+      "prompt_pred": [
+        "Allgemein:neutral"
+      ],
+      "qlora_pred": []
+    },
+    {
+      "doc_id": "http://www.facebook.com/232306660179000/posts/877933175616342?comment\\_id=878088725600787#232306660179000\\_877933175616342\\_878088725600787",
+      "text": "Re: Mannheimer Morgen Sorry, wenn ich jetzt harte Kritik ausüben muss. Ich finde es gut, dass die Suite geht, da es durch diese Diskotek große Verschmutzungen g",
+      "gold": [
+        "Atmosphäre:negative"
+      ],
+      "prompt_pred": [
+        "Atmosphäre:negative"
+      ],
+      "qlora_pred": []
+    },
+    {
+      "doc_id": "http://www.youtube.com/watch?v=3Il8JRF59R4",
+      "text": "2. Verkehrshistorisches Wochenende bei der S Bahn Berlin (12.9.1998) Das 1. VhW ist an mir vorbei gegangen, das 3. fand wohl nicht statt. Jedenfalls fuhren wied",
+      "gold": [
+        "Allgemein:positive"
+      ],
+      "prompt_pred": [
+        "Allgemein:positive"
+      ],
+      "qlora_pred": [
+        "Allgemein:negative"
+      ]
+    },
+    {
+      "doc_id": "http://www.facebook.com/224465028866/posts/10153193800553867?comment\\_id=10153193826393867#224465028866\\_10153193800553867\\_10153193826393867",
+      "text": "Re: Radio Duisburg Ne,doppelt so viele Kilometer über die Bahn als durch Stadt, dauert genauso lange",
+      "gold": [
+        "Allgemein:neutral"
+      ],
+      "prompt_pred": [
+        "Allgemein:neutral"
+      ],
+      "qlora_pred": [
+        "Allgemein:positive"
+      ]
+    }
+  ]
+}

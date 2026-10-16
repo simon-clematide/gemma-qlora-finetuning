@@ -1,0 +1,11 @@
+{
+  "adapter_dir": "models/adapters/smoke_task_c_lora",
+  "device": "mps",
+  "train_examples": 64,
+  "max_steps": 5,
+  "train_loss": 1.7626367092132569,
+  "train_wall_sec": 304.2,
+  "peak_vram_mb": 0.0,
+  "trainable_parameters": 20766720,
+  "total_parameters": 2635108608
+}

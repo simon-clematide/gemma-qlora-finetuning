@@ -1,0 +1,24 @@
+{
+  "run_id": "Q1_qlora_r16",
+  "task": "C",
+  "method": "qlora_nf4_r16",
+  "base_model_id": "google/gemma-2-2b-it",
+  "prompt_version": "v1",
+  "taxonomy_version": "v1_19cats",
+  "seed": 202,
+  "hardware_and_parameter_profile": {
+    "model_id": "google/gemma-2-2b-it",
+    "quantization": "nf4_4bit",
+    "lora_rank": 16,
+    "base_parameters": 2614341888,
+    "trainable_parameters": 20766720,
+    "total_parameters": 2635108608,
+    "trainable_percent": 0.7881,
+    "base_weights_mb": 1402.4,
+    "adapter_checkpoint_mb": 39.61,
+    "estimated_peak_vram_mb": 2931.6
+  },
+  "summary_dev_c2_micro_f1": 0.8352078239608801,
+  "summary_test_syn_c2_micro_f1": 0.8359811077715757,
+  "summary_test_dia_c2_micro_f1": 0.8228247162673392
+}

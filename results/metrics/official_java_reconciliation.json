@@ -1,0 +1,28 @@
+{
+  "reconciliations": [
+    {
+      "run_id": "P3_dev_optimized_10shot",
+      "split": "test_syn",
+      "python_strict_c1_micro_f1": 0.76682,
+      "python_java_compat_c1_micro_f1": 0.621824,
+      "official_jar_c1_micro_f1": 0.621824,
+      "python_strict_c2_micro_f1": 0.703312,
+      "python_java_compat_c2_micro_f1": 0.542391,
+      "official_jar_c2_micro_f1": 0.542391,
+      "exact_agreement_c1": true,
+      "exact_agreement_c2": true
+    },
+    {
+      "run_id": "Q1_qlora_r16",
+      "split": "test_syn",
+      "python_strict_c1_micro_f1": 0.872639,
+      "python_java_compat_c1_micro_f1": 0.774055,
+      "official_jar_c1_micro_f1": 0.774055,
+      "python_strict_c2_micro_f1": 0.835981,
+      "python_java_compat_c2_micro_f1": 0.718185,
+      "official_jar_c2_micro_f1": 0.718185,
+      "exact_agreement_c1": true,
+      "exact_agreement_c2": true
+    }
+  ]
+}

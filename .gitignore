@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+data/raw/
+data/canonical/*.jsonl
+!data/canonical/*.jsonl.gz
+data/derived/**/*.jsonl
+results/predictions/*.jsonl
+!results/predictions/smoke_*.jsonl
+results/predictions/*.xml
+results/predictions/*.tsv
+models/adapters/*
+!models/adapters/.gitkeep
+.DS_Store

@@ -1,0 +1,65 @@
+{
+  "dataset_name": "GermEval 2017 ABSA",
+  "license": "CC BY-NC 2.0",
+  "parser_version": "0.1.0",
+  "generated_at_utc": "2026-10-16T13:46:06.219113+00:00",
+  "splits": {
+    "train": {
+      "source_xml": "data/raw/train_v1.4.xml",
+      "source_xml_sha256": "b90022252e733bd4ed7b85a7c587d630e0dd706341fd86852d973d876abf237a",
+      "canonical_jsonl": "data/canonical/train.jsonl",
+      "canonical_sha256": "14365d79a05e5d4d563f182e791ba11556a00d6e0fdfa6e1670af4661d4d33a1",
+      "task_c_jsonl": "data/derived/task_c/train.jsonl",
+      "task_c_sha256": "f41d712481e58907ad17e7c8d11e75a9fb6ab8096825a2093386833a1bde8596",
+      "task_d_jsonl": "data/derived/task_d/train.jsonl",
+      "task_d_sha256": "1bf248fdcad7f156b3ec577d35391e288f09ca6836d2eb9377fb390818fdcf6b",
+      "num_documents": 19432,
+      "num_opinions": 21584,
+      "roundtrip_verified": true,
+      "typo_patches_applied_in_derived": true
+    },
+    "dev": {
+      "source_xml": "data/raw/dev_v1.4.xml",
+      "source_xml_sha256": "f15e35909055f6368266b28cca36f5c3a72872e50b0ebe33d4a436db85957880",
+      "canonical_jsonl": "data/canonical/dev.jsonl",
+      "canonical_sha256": "2d78c5458befa00b3a28b8bae2de07dc3a9060b02a285810e6b66d6e97adbec0",
+      "task_c_jsonl": "data/derived/task_c/dev.jsonl",
+      "task_c_sha256": "f17987cd52c29ce26aa3257572c112a94c239dbd3312dc35927a1c8f8a1cb9a8",
+      "task_d_jsonl": "data/derived/task_d/dev.jsonl",
+      "task_d_sha256": "1c9ab8de019bc17a0cb955993966b26fd8b71f11c3f50bdbbf4093320a54767a",
+      "num_documents": 2369,
+      "num_opinions": 2514,
+      "roundtrip_verified": true,
+      "typo_patches_applied_in_derived": false
+    },
+    "test_syn": {
+      "source_xml": "data/raw/test_TIMESTAMP1.xml",
+      "source_xml_sha256": "8d535d130493e339af92d179c3438f7d90ab660935a9627fd06e6fd14505c61c",
+      "canonical_jsonl": "data/canonical/test_syn.jsonl",
+      "canonical_sha256": "e1ec0d16f205aaac3788fc65ee5308a3d66bea9e4743a6ca6d5605d4cbe4bb48",
+      "task_c_jsonl": "data/derived/task_c/test_syn.jsonl",
+      "task_c_sha256": "5c9310eb47751ef229da33fb07471e549618284d8a10b6f3faeff8513a87f711",
+      "task_d_jsonl": "data/derived/task_d/test_syn.jsonl",
+      "task_d_sha256": "9910d72159205af5483c84b5dcca0b88940706096b42cd4a26356ae2efaa1421",
+      "num_documents": 2566,
+      "num_opinions": 3261,
+      "roundtrip_verified": true,
+      "typo_patches_applied_in_derived": false
+    },
+    "test_dia": {
+      "source_xml": "data/raw/test_TIMESTAMP2.xml",
+      "source_xml_sha256": "18aad7a8224a16756210dbc6e22e1c6fae26817c91ce17593faeeb933c1557dd",
+      "canonical_jsonl": "data/canonical/test_dia.jsonl",
+      "canonical_sha256": "d452be627a372149c7facf7c7f07dc8f83c9e7b02a5e4e8ee52f909e9ba8a556",
+      "task_c_jsonl": "data/derived/task_c/test_dia.jsonl",
+      "task_c_sha256": "6d5c8a4a646cf2ba151fb013b677c941cbe7db1c1172107754b33f56b53b1f2a",
+      "task_d_jsonl": "data/derived/task_d/test_dia.jsonl",
+      "task_d_sha256": "0b97b7ca46016026da808f7b384f1005b77013cf233b313fa8df8eb0c840405a",
+      "num_documents": 1842,
+      "num_opinions": 2080,
+      "roundtrip_verified": true,
+      "typo_patches_applied_in_derived": false
+    }
+  },
+  "validation_total_issues": 1302
+}

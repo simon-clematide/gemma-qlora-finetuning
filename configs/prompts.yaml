@@ -1,0 +1,51 @@
+version: "v1"
+
+task_c:
+  p0_minimal: |
+    Klassifiziere den folgenden deutschen Text bezüglich genannter Aspekte der Deutschen Bahn und deren Polarität.
+    Erlaubte Kategorien: {categories_csv}
+    Erlaubte Polaritäten: {polarities_csv}
+    Gib ausschließlich ein valides JSON-Objekt im Format {{"labels": ["Kategorie:Polarität", ...]}} zurück. Falls keine relevanten Aspekte vorliegen, gib {{"labels": []}} zurück.
+
+    Text:
+    {text}
+
+  p1_guidelines: |
+    Du bist ein Experte für Aspect-Based Sentiment Analysis (GermEval 2017 Task C) von deutschsprachigem Kundenfeedback zur Deutschen Bahn.
+    Bestimme alle im Text ausgedrückten Aspekte (sowohl explizit genannte Zielbegriffe als auch implizite Aussagen über die Bahn) und deren Polarität.
+
+    Taxonomie der 19 erlaubten Kategorien:
+    {taxonomy_guidelines}
+
+    Erlaubte Polaritäten:
+    - positive: Lob, Zufriedenheit oder positiver Zustand bezüglich des Aspekts
+    - negative: Kritik, Beschwerde, Störung, Verspätung oder negativer Zustand bezüglich des Aspekts
+    - neutral: Sachliche Information, Frage oder neutrale Erwähnung ohne Wertung
+
+    Regeln:
+    1. Wenn der Text keinen Bezug zur Deutschen Bahn hat oder keine Aspekte enthält, gib {{"labels": []}} zurück.
+    2. Jedes Label hat exakt das Format "Kategorie:Polarität".
+    3. Sortiere die Labels und gib keine Duplikate aus.
+    4. Antworte ausschließlich mit dem JSON-Objekt ohne Markdown-Blöcke oder Erklärungen.
+
+    Text:
+    {text}
+
+task_d:
+  d1_guidelines: |
+    Du bist ein Experte für Opinion Target Extraction (GermEval 2017 Task D) von deutschsprachigem Kundenfeedback zur Deutschen Bahn.
+    Extrahiere alle explizit im Text genannten Zielausdrücke (Opinion Target Expressions), auf die sich eine Bewertung oder sachliche Aussage bezieht, zusammen mit Kategorie und Polarität.
+
+    Taxonomie der 19 erlaubten Kategorien:
+    {taxonomy_guidelines}
+
+    Erlaubte Polaritäten: positive, neutral, negative
+
+    Regeln:
+    1. Kopiere den Zielausdruck ("target") wortwörtlich (exakte Groß-/Kleinschreibung) aus dem Quelltext.
+    2. Falls ein Zielausdruck im Satz geteilt ist (z.B. Klammerform "zeigt ... an"), verbinde die Teile mit " * " (z.B. "zeigt * an").
+    3. Implizite Meinungen ohne konkreten Zielausdruck im Text werden NICHT als Target extrahiert.
+    4. Gib ausschließlich ein valides JSON-Objekt im Format {{"targets": [{{"target": "...", "category": "...", "polarity": "..."}}]}} zurück. Falls keine expliziten Targets vorliegen, gib {{"targets": []}} zurück.
+
+    Text:
+    {text}

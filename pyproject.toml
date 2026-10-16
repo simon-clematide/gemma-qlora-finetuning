@@ -1,0 +1,53 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "germeval-llm"
+version = "0.1.0"
+description = "GermEval 2017 ABSA: Prompting vs. LoRA vs. QLoRA (Gemma Instruct)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.7.0",
+    "pyyaml>=6.0.1",
+    "lxml>=5.2.0",
+    "numpy>=1.26.0",
+    "pandas>=2.2.0",
+    "scikit-learn>=1.5.0",
+    "matplotlib>=3.9.0",
+    "seaborn>=0.13.0",
+    "tqdm>=4.66.0",
+    "jinja2>=3.1.4",
+    "ipykernel>=6.29.0",
+    "jupyter>=1.0.0",
+    "nbformat>=5.10.0",
+    "nbclient>=0.10.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2.0",
+    "pytest-cov>=5.0.0",
+    "ruff>=0.5.0",
+]
+ml = [
+    "torch>=2.3.0",
+    "transformers>=4.44.0",
+    "datasets>=2.20.0",
+    "accelerate>=0.33.0",
+    "peft>=0.12.0",
+    "trl>=0.11.0",
+    "huggingface-hub>=0.24.0",
+    "sentencepiece>=0.2.0",
+]
+cuda = [
+    "bitsandbytes>=0.43.3; platform_system == 'Linux'",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/germeval_llm"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

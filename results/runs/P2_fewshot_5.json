@@ -1,0 +1,17 @@
+{
+  "run_id": "P2_fewshot_5",
+  "task": "C",
+  "method": "prompt_few_shot_5",
+  "base_model_id": "google/gemma-2-2b-it",
+  "prompt_version": "v1",
+  "taxonomy_version": "v1_19cats",
+  "seed": 104,
+  "hardware_and_parameter_profile": {
+    "model_id": "google/gemma-2-2b-it",
+    "trainable_parameters": 0,
+    "estimated_peak_vram_mb": 2650.0
+  },
+  "summary_dev_c2_micro_f1": 0.6574556830031283,
+  "summary_test_syn_c2_micro_f1": 0.6672798344447,
+  "summary_test_dia_c2_micro_f1": 0.6379713046379712
+}
