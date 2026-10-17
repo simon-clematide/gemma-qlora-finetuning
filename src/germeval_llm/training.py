@@ -257,22 +257,15 @@ def run_sft_adapter_training(
     peft_config = build_peft_lora_config(cfg)
     model = get_peft_model(model, peft_config)
 
-    # On Turing GPUs like T4 (compute capability 7.5, bf16_supported=False), Gemma-2's config.json defaults to bfloat16.
-    # 1. Convert any remaining non-quantized bfloat16 buffers/weights to float16 (compute_dtype)
-    # 2. Convert all trainable LoRA master weights (requires_grad=True) to float32 so PyTorch's fp16 GradScaler can unscale them.
-    if hw["cuda_available"] and not hw["bf16_supported"]:
+    # Ensure all non-4bit parameters (including trainable LoRA weights, embeddings, norms) and buffers match compute_dtype
+    # (float16 on Turing T4, bfloat16 on Ampere+ L4/A100) so there are zero bfloat16 tensors on T4 GPUs.
+    if hw["device"] != "cpu":
         for param in model.parameters():
-            if param.requires_grad:
-                param.data = param.data.to(torch.float32)
-            elif param.dtype == torch.bfloat16 and param.__class__.__name__ != "Params4bit":
+            if param.__class__.__name__ != "Params4bit" and param.dtype != compute_dtype:
                 param.data = param.data.to(compute_dtype)
         for buf in model.buffers():
-            if buf.dtype == torch.bfloat16:
+            if buf.dtype.is_floating_point and buf.dtype != compute_dtype:
                 buf.data = buf.data.to(compute_dtype)
-    elif hw["device"] != "cpu":
-        for param in model.parameters():
-            if param.requires_grad and param.dtype != compute_dtype:
-                param.data = param.data.to(compute_dtype)
 
     budget = compute_training_budget(
         num_examples=len(raw_train_rows),
@@ -301,8 +294,11 @@ def run_sft_adapter_training(
         completion_only_loss=True,
         optim=str(tcfg.get("optim", "paged_adamw_8bit")) if hw["cuda_available"] else "adamw_torch",
         weight_decay=float(tcfg.get("weight_decay", 0.01)),
+        # Only enable bf16 on Ampere+ GPUs (CC >= 8.0, e.g. L4/A100).
+        # On Turing GPUs like T4 (CC 7.5), base/4-bit compute already runs in float16 via compute_dtype=torch.float16,
+        # so keeping fp16=False avoids PyTorch AMP GradScaler's BFloat16 unscale NotImplementedError.
         bf16=hw["bf16_supported"] and hw["cuda_available"],
-        fp16=(not hw["bf16_supported"]) and hw["cuda_available"],
+        fp16=False,
         logging_steps=max(1, max_steps // 10),
         eval_strategy="no" if max_steps <= 25 else "steps",
         eval_steps=max(10, max_steps // 3),
