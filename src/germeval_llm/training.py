@@ -291,6 +291,13 @@ def run_sft_adapter_training(
     if hw["cuda_available"]:
         torch.cuda.reset_peak_memory_stats()
 
+    try:
+        from accelerate.state import AcceleratorState
+
+        AcceleratorState._reset_state(reset_partial_state=True)
+    except Exception:
+        pass
+
     sft_config = SFTConfig(
         output_dir=str(out_dir / "checkpoints"),
         per_device_train_batch_size=int(tcfg.get("per_device_train_batch_size", 4)),
