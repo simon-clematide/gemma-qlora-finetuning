@@ -1,0 +1,11 @@
+{
+  "adapter_dir": "models/adapters/task_c_lora_n1000",
+  "device": "mps",
+  "train_examples": 1000,
+  "max_steps": 100,
+  "train_loss": 0.34790629625320435,
+  "train_wall_sec": 6811.79,
+  "peak_vram_mb": 0.0,
+  "trainable_parameters": 20766720,
+  "total_parameters": 2635108608
+}
