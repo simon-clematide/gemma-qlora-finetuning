@@ -215,6 +215,7 @@ def run_sft_adapter_training(
     model_kwargs: dict[str, Any] = {
         "device_map": "auto" if hw["cuda_available"] else None,
         "attn_implementation": "eager",  # accurate Gemma-2 soft-capping attention
+        "dtype": compute_dtype if hw["device"] != "cpu" else torch.float32,
     }
 
     if load_in_4bit:
@@ -241,8 +242,6 @@ def run_sft_adapter_training(
             bnb_4bit_use_double_quant=bool(qcfg.get("bnb_4bit_use_double_quant", True)),
             bnb_4bit_compute_dtype=compute_dtype,
         )
-    else:
-        model_kwargs["dtype"] = compute_dtype if hw["device"] != "cpu" else torch.float32
 
     model = AutoModelForCausalLM.from_pretrained(model_id, **model_kwargs)
     if not hw["cuda_available"] and hw["device"] == "mps":
@@ -257,6 +256,12 @@ def run_sft_adapter_training(
 
     peft_config = build_peft_lora_config(cfg)
     model = get_peft_model(model, peft_config)
+
+    # Ensure all trainable LoRA parameters match compute_dtype (e.g. float16 on T4 where Gemma's config.json defaults to bfloat16)
+    if hw["device"] != "cpu":
+        for param in model.parameters():
+            if param.requires_grad and param.dtype != compute_dtype:
+                param.data = param.data.to(compute_dtype)
 
     budget = compute_training_budget(
         num_examples=len(raw_train_rows),

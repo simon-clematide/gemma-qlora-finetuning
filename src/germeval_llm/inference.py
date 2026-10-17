@@ -80,6 +80,7 @@ def load_gemma_model_and_tokenizer(
     model_kwargs: dict[str, Any] = {
         "revision": revision,
         "device_map": "auto" if hw["cuda_available"] else None,
+        "dtype": compute_dtype if hw["device"] != "cpu" else torch.float32,
     }
 
     if load_in_4bit and hw["cuda_available"]:
@@ -105,8 +106,6 @@ def load_gemma_model_and_tokenizer(
             bnb_4bit_use_double_quant=True,
             bnb_4bit_compute_dtype=compute_dtype,
         )
-    else:
-        model_kwargs["dtype"] = compute_dtype if hw["device"] != "cpu" else torch.float32
 
     model = AutoModelForCausalLM.from_pretrained(model_id, **model_kwargs)
     if not hw["cuda_available"] and hw["device"] == "mps":
