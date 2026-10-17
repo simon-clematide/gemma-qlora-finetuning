@@ -257,13 +257,22 @@ def run_sft_adapter_training(
     peft_config = build_peft_lora_config(cfg)
     model = get_peft_model(model, peft_config)
 
-    # When fp16=True (e.g., on T4 GPUs with CC 7.5), PyTorch AMP GradScaler requires trainable master weights in float32
-    # (whereas Gemma's config.json defaults to bfloat16, which triggers NotImplementedError in GradScaler._unscale_grads_).
-    target_trainable_dtype = torch.float32 if (not hw["bf16_supported"] and hw["cuda_available"]) else compute_dtype
-    if hw["device"] != "cpu":
+    # On Turing GPUs like T4 (compute capability 7.5, bf16_supported=False), Gemma-2's config.json defaults to bfloat16.
+    # 1. Convert any remaining non-quantized bfloat16 buffers/weights to float16 (compute_dtype)
+    # 2. Convert all trainable LoRA master weights (requires_grad=True) to float32 so PyTorch's fp16 GradScaler can unscale them.
+    if hw["cuda_available"] and not hw["bf16_supported"]:
         for param in model.parameters():
-            if param.requires_grad and param.dtype != target_trainable_dtype:
-                param.data = param.data.to(target_trainable_dtype)
+            if param.requires_grad:
+                param.data = param.data.to(torch.float32)
+            elif param.dtype == torch.bfloat16 and param.__class__.__name__ != "Params4bit":
+                param.data = param.data.to(compute_dtype)
+        for buf in model.buffers():
+            if buf.dtype == torch.bfloat16:
+                buf.data = buf.data.to(compute_dtype)
+    elif hw["device"] != "cpu":
+        for param in model.parameters():
+            if param.requires_grad and param.dtype != compute_dtype:
+                param.data = param.data.to(compute_dtype)
 
     budget = compute_training_budget(
         num_examples=len(raw_train_rows),
