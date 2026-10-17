@@ -43,7 +43,11 @@ def detect_compute_device() -> dict[str, Any]:
         if torch.cuda.is_available():
             info["device"] = "cuda"
             info["cuda_available"] = True
-            info["bf16_supported"] = bool(torch.cuda.is_bf16_supported())
+            major_cc, minor_cc = torch.cuda.get_device_capability(0)
+            info["compute_capability"] = f"{major_cc}.{minor_cc}"
+            # True hardware bfloat16 Tensor Core + torch.addmm(out_dtype=fp32) support requires Ampere (CC >= 8.0, e.g. L4/A100).
+            # Turing GPUs like T4 (CC 7.5) must use float16 to avoid RuntimeError in TRL's chunked_logprob kernel.
+            info["bf16_supported"] = bool(major_cc >= 8 and torch.cuda.is_bf16_supported())
             info["gpu_name"] = torch.cuda.get_device_name(0)
             props = torch.cuda.get_device_properties(0)
             info["gpu_vram_gb"] = round(props.total_memory / (1024**3), 2)
