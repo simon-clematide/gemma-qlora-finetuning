@@ -721,7 +721,7 @@ def get_notebooks_spec() -> dict[str, list]:
             new_code_cell(
                 "import os, sys\n"
                 "from pathlib import Path\n\n"
-                "# If running on Google Colab and not yet inside the repository, clone it and install dependencies:\n"
+                "# If running on Google Colab, clone or pull the latest repo and install in editable mode (-e):\n"
                 "if 'google.colab' in sys.modules:\n"
                 "    REPO_URL = os.environ.get('GERMEVAL_REPO_URL', 'https://github.com/simon-clematide/gemma-qlora-finetuning.git')\n"
                 "    if not Path('pyproject.toml').exists() and not Path('gemma-qlora-finetuning/pyproject.toml').exists():\n"
@@ -729,7 +729,8 @@ def get_notebooks_spec() -> dict[str, list]:
                 "        os.system(f'git clone {REPO_URL}')\n"
                 "    if Path('gemma-qlora-finetuning/pyproject.toml').exists():\n"
                 "        os.chdir('gemma-qlora-finetuning')\n"
-                "    os.system('pip install -q -U \"bitsandbytes>=0.46.1\" \".[ml,cuda]\"')\n\n"
+                "    os.system('git pull origin main')\n"
+                "    os.system('pip install -q -U \"bitsandbytes>=0.46.1\" -e \".[ml,cuda]\"')\n\n"
                 "ROOT = Path.cwd().resolve()\n"
                 "if ROOT.name == 'notebooks':\n"
                 "    ROOT = ROOT.parent\n"

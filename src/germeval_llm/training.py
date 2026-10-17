@@ -257,11 +257,13 @@ def run_sft_adapter_training(
     peft_config = build_peft_lora_config(cfg)
     model = get_peft_model(model, peft_config)
 
-    # Ensure all trainable LoRA parameters match compute_dtype (e.g. float16 on T4 where Gemma's config.json defaults to bfloat16)
+    # When fp16=True (e.g., on T4 GPUs with CC 7.5), PyTorch AMP GradScaler requires trainable master weights in float32
+    # (whereas Gemma's config.json defaults to bfloat16, which triggers NotImplementedError in GradScaler._unscale_grads_).
+    target_trainable_dtype = torch.float32 if (not hw["bf16_supported"] and hw["cuda_available"]) else compute_dtype
     if hw["device"] != "cpu":
         for param in model.parameters():
-            if param.requires_grad and param.dtype != compute_dtype:
-                param.data = param.data.to(compute_dtype)
+            if param.requires_grad and param.dtype != target_trainable_dtype:
+                param.data = param.data.to(target_trainable_dtype)
 
     budget = compute_training_budget(
         num_examples=len(raw_train_rows),
