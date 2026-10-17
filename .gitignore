@@ -9,6 +9,7 @@ data/canonical/*.jsonl
 data/derived/**/*.jsonl
 results/predictions/*.jsonl
 !results/predictions/smoke_*.jsonl
+!results/predictions/P1_guidelines_0shot_test_syn.jsonl
 results/predictions/*.xml
 results/predictions/*.tsv
 models/adapters/*
