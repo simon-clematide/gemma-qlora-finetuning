@@ -252,6 +252,8 @@ def run_sft_adapter_training(
         model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
     else:
         model.gradient_checkpointing_enable()
+        if hasattr(model, "enable_input_require_grads"):
+            model.enable_input_require_grads()
 
     peft_config = build_peft_lora_config(cfg)
     model = get_peft_model(model, peft_config)
