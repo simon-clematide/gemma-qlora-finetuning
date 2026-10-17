@@ -79,6 +79,17 @@ def load_gemma_model_and_tokenizer(
     }
 
     if load_in_4bit and hw["cuda_available"]:
+        import importlib
+        import subprocess
+        import sys
+        import transformers.utils.import_utils as iu
+
+        importlib.invalidate_caches()
+        if not iu.is_bitsandbytes_available():
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "-U", "bitsandbytes>=0.46.1"])
+            importlib.invalidate_caches()
+            iu._bitsandbytes_available = iu._is_package_available("bitsandbytes")
+
         from transformers import BitsAndBytesConfig
 
         model_kwargs["quantization_config"] = BitsAndBytesConfig(
