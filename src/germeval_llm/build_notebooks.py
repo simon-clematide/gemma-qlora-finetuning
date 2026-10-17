@@ -743,23 +743,11 @@ def get_notebooks_spec() -> dict[str, list]:
             ),
             new_markdown_cell(
                 "### Authenticate with Hugging Face Hub (for gated `google/gemma-2-2b-it`)\n"
-                "In Google Colab, store your Hugging Face token in **Colab Secrets** (key icon on the left sidebar) under the name `HF_TOKEN`. The cell below automatically logs in using `HF_TOKEN` from Colab Secrets or environment variables."
+                "Run `login()` below and paste your Hugging Face access token when prompted:"
             ),
             new_code_cell(
-                "import os\n"
-                "hf_token = os.environ.get('HF_TOKEN')\n"
-                "if not hf_token and 'google.colab' in sys.modules:\n"
-                "    try:\n"
-                "        from google.colab import userdata\n"
-                "        hf_token = userdata.get('HF_TOKEN')\n"
-                "    except Exception:\n"
-                "        pass\n"
-                "if hf_token:\n"
-                "    from huggingface_hub import login\n"
-                "    login(token=hf_token, add_to_git_credential=False)\n"
-                "    print('Authenticated with Hugging Face Hub via HF_TOKEN.')\n"
-                "else:\n"
-                "    print('Using existing local Hugging Face credentials (or run `huggingface_hub.login()` if needed).')"
+                "from huggingface_hub import login\n"
+                "login()"
             ),
             new_markdown_cell(
                 "---\n"
