@@ -132,25 +132,115 @@ def compute_completion_only_labels(
     input_ids: list[int],
     response_template_ids: list[int],
     ignore_index: int = -100,
+    max_seq_length: int | None = None,
 ) -> list[int]:
     """Compute token-level loss labels where all prompt tokens up to and including the last
     '<start_of_turn>model\\n' marker are masked with -100.
+
+    If `max_seq_length` is provided, truncates `input_ids` to `max_seq_length` first and raises
+    ValueError if truncation removes the response template marker or leaves zero completion tokens.
     """
-    n = len(input_ids)
+    seq = list(input_ids[:max_seq_length]) if max_seq_length is not None else list(input_ids)
+    n = len(seq)
     m = len(response_template_ids)
     if m == 0 or m > n:
         raise ValueError("Invalid response_template_ids length.")
 
     match_end = -1
     for i in range(n - m + 1):
-        if input_ids[i : i + m] == response_template_ids:
+        if seq[i : i + m] == response_template_ids:
             match_end = i + m
 
     if match_end == -1:
         raise ValueError("Response template marker not found in input_ids.")
+    if match_end >= n:
+        raise ValueError("No completion tokens remain after response template marker (truncated).")
 
-    labels = [ignore_index] * match_end + list(input_ids[match_end:])
+    labels = [ignore_index] * match_end + list(seq[match_end:])
     return labels
+
+
+def inspect_completion_only_masking(
+    example: TaskCExample,
+    tokenizer: Any | None = None,
+    max_seq_length: int = 1024,
+    context_window_before_turn: int = 5,
+) -> dict[str, Any]:
+    """Tokenize a TaskCExample and return diagnostic counts and token-level loss-masking preview."""
+    if tokenizer is None:
+        from transformers import AutoTokenizer
+
+        for candidate in (
+            "models/adapters/task_c_lora_n1000",
+            "models/adapters/smoke_task_c_lora",
+            "google/gemma-2-2b-it",
+        ):
+            if candidate.startswith("models/") and not Path(candidate).exists():
+                continue
+            try:
+                tokenizer = AutoTokenizer.from_pretrained(candidate)
+                break
+            except Exception:
+                continue
+
+    full_chat_str = format_gemma_chat_string(
+        example.prompt,
+        example.completion,
+        include_bos=True,
+    )
+    response_marker = "<start_of_turn>model\n"
+
+    if tokenizer is not None:
+        raw_ids: list[int] = list(tokenizer.encode(full_chat_str, add_special_tokens=False))
+        resp_ids: list[int] = list(tokenizer.encode(response_marker, add_special_tokens=False))
+        labels = compute_completion_only_labels(
+            raw_ids, resp_ids, ignore_index=-100, max_seq_length=max_seq_length
+        )
+        seq_ids = raw_ids[: len(labels)]
+        tokens_str = [tokenizer.decode([tid], skip_special_tokens=False) for tid in seq_ids]
+    else:
+        # Fallback whitespace/character approximation only when no tokenizer is reachable
+        prompt_only_str = format_gemma_chat_string(example.prompt, None, include_bos=True)
+        comp_only_str = f"{example.completion[0].content}<end_of_turn>\n"
+        p_parts = prompt_only_str.split()
+        c_parts = [ example.completion[0].content, "<end_of_turn>", "\n" ]
+        tokens_str = p_parts + c_parts
+        seq_ids = list(range(1, len(tokens_str) + 1))
+        labels = [-100] * len(p_parts) + seq_ids[len(p_parts) :]
+
+    masked_count = sum(1 for lbl in labels if lbl == -100)
+    active_count = sum(1 for lbl in labels if lbl != -100)
+    total_count = len(labels)
+
+    start_idx = max(0, masked_count - context_window_before_turn)
+    boundary_rows: list[dict[str, Any]] = []
+    for pos in range(start_idx, total_count):
+        lbl = labels[pos]
+        is_masked = lbl == -100
+        boundary_rows.append(
+            {
+                "position": pos,
+                "token": repr(tokens_str[pos]),
+                "input_id": seq_ids[pos],
+                "label": lbl,
+                "role_in_loss": (
+                    "Ignored (-100: conditioning context)"
+                    if is_masked
+                    else "Computed (direct completion target)"
+                ),
+            }
+        )
+
+    return {
+        "doc_id": example.doc_id,
+        "total_tokens": total_count,
+        "masked_prompt_tokens": masked_count,
+        "active_completion_tokens": active_count,
+        "active_percentage": round(100.0 * active_count / max(1, total_count), 2),
+        "input_ids": seq_ids,
+        "labels": labels,
+        "boundary_preview": boundary_rows,
+    }
 
 
 def format_task_c_completion_json(labels: list[str]) -> str:
@@ -165,3 +255,4 @@ def format_task_d_completion_json(targets: list[TaskDTargetItem]) -> str:
         ensure_ascii=False,
         separators=(",", ":"),
     )
+

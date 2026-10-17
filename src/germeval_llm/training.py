@@ -349,15 +349,54 @@ def run_sft_adapter_training(
     )
 
     trainable_params, total_params = model.get_nb_trainable_parameters()
+    log_history = list(trainer.state.log_history) if hasattr(trainer, "state") and trainer.state else []
+    train_history, eval_history = extract_training_and_eval_series(log_history)
+    final_eval_loss = float(eval_history[-1]["eval_loss"]) if eval_history else None
+
     return {
         "adapter_dir": str(out_dir),
         "device": hw["device"],
         "train_examples": len(raw_train_rows),
         "max_steps": max_steps,
+        "seed": seed,
         "train_loss": float(train_res.training_loss),
+        "final_eval_loss": final_eval_loss,
         "train_wall_sec": round(wall_sec, 2),
         "peak_vram_mb": peak_vram_mb,
         "trainable_parameters": int(trainable_params),
         "total_parameters": int(total_params),
+        "log_history": log_history,
+        "train_history": train_history,
+        "eval_history": eval_history,
     }
+
+
+def extract_training_and_eval_series(
+    log_history: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Separate Hugging Face Trainer log_history into distinct training-loss and validation-loss series.
+
+    Training and evaluation events may occur at different step frequencies and as separate log entries.
+    """
+    train_history = [
+        {
+            "step": int(event["step"]),
+            "loss": float(event["loss"]),
+            "learning_rate": float(event.get("learning_rate", 0.0)),
+            "epoch": float(event.get("epoch", 0.0)),
+        }
+        for event in log_history
+        if "loss" in event and "step" in event
+    ]
+    eval_history = [
+        {
+            "step": int(event["step"]),
+            "eval_loss": float(event["eval_loss"]),
+            "epoch": float(event.get("epoch", 0.0)),
+        }
+        for event in log_history
+        if "eval_loss" in event and "step" in event
+    ]
+    return train_history, eval_history
+
 

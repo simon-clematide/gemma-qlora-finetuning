@@ -156,6 +156,186 @@ def bootstrap_micro_f1_ci(
     }
 
 
+def paired_bootstrap_delta_f1_ci(
+    gold_sets: Sequence[set[str]],
+    baseline_pred_sets: Sequence[set[str]],
+    ft_pred_sets: Sequence[set[str]],
+    n_bootstrap: int = 1000,
+    seed: int = 42,
+    ignore_empty_gold_docs: bool = False,
+) -> dict[str, float]:
+    """Compute paired document-level bootstrap 95% confidence interval for ΔF1 = F1_ft - F1_baseline."""
+    n = len(gold_sets)
+    if len(baseline_pred_sets) != n or len(ft_pred_sets) != n:
+        raise ValueError(
+            f"Length mismatch in paired bootstrap: gold={n}, "
+            f"baseline={len(baseline_pred_sets)}, ft={len(ft_pred_sets)}"
+        )
+    if n == 0:
+        return {
+            "point_baseline_f1": 0.0,
+            "point_ft_f1": 0.0,
+            "point_delta_f1": 0.0,
+            "delta_mean": 0.0,
+            "delta_std": 0.0,
+            "delta_ci95_low": 0.0,
+            "delta_ci95_high": 0.0,
+            "baseline_ci95_low": 0.0,
+            "baseline_ci95_high": 0.0,
+            "ft_ci95_low": 0.0,
+            "ft_ci95_high": 0.0,
+            "prob_improvement": 0.0,
+        }
+
+    b_tp = np.zeros(n, dtype=np.int64)
+    b_fp = np.zeros(n, dtype=np.int64)
+    b_fn = np.zeros(n, dtype=np.int64)
+    q_tp = np.zeros(n, dtype=np.int64)
+    q_fp = np.zeros(n, dtype=np.int64)
+    q_fn = np.zeros(n, dtype=np.int64)
+
+    for i, (g, b, q) in enumerate(zip(gold_sets, baseline_pred_sets, ft_pred_sets)):
+        if ignore_empty_gold_docs and len(g) == 0:
+            continue
+        b_tp[i] = len(g.intersection(b))
+        b_fp[i] = len(b - g)
+        b_fn[i] = len(g - b)
+        q_tp[i] = len(g.intersection(q))
+        q_fp[i] = len(q - g)
+        q_fn[i] = len(g - q)
+
+    point_b = compute_prf1(int(b_tp.sum()), int(b_fp.sum()), int(b_fn.sum()))["f1"]
+    point_q = compute_prf1(int(q_tp.sum()), int(q_fp.sum()), int(q_fn.sum()))["f1"]
+
+    rng = np.random.default_rng(seed)
+    idx = rng.integers(0, n, size=(n_bootstrap, n))
+
+    b_tp_s = b_tp[idx].sum(axis=1)
+    b_fp_s = b_fp[idx].sum(axis=1)
+    b_fn_s = b_fn[idx].sum(axis=1)
+    b_denom = (2 * b_tp_s + b_fp_s + b_fn_s).astype(np.float64)
+    b_scores = np.divide(2.0 * b_tp_s, b_denom, out=np.zeros_like(b_denom), where=b_denom > 0)
+
+    q_tp_s = q_tp[idx].sum(axis=1)
+    q_fp_s = q_fp[idx].sum(axis=1)
+    q_fn_s = q_fn[idx].sum(axis=1)
+    q_denom = (2 * q_tp_s + q_fp_s + q_fn_s).astype(np.float64)
+    q_scores = np.divide(2.0 * q_tp_s, q_denom, out=np.zeros_like(q_denom), where=q_denom > 0)
+
+    deltas = q_scores - b_scores
+
+    return {
+        "point_baseline_f1": float(point_b),
+        "point_ft_f1": float(point_q),
+        "point_delta_f1": float(point_q - point_b),
+        "delta_mean": float(np.mean(deltas)),
+        "delta_std": float(np.std(deltas)),
+        "delta_ci95_low": float(np.percentile(deltas, 2.5)),
+        "delta_ci95_high": float(np.percentile(deltas, 97.5)),
+        "baseline_ci95_low": float(np.percentile(b_scores, 2.5)),
+        "baseline_ci95_high": float(np.percentile(b_scores, 97.5)),
+        "ft_ci95_low": float(np.percentile(q_scores, 2.5)),
+        "ft_ci95_high": float(np.percentile(q_scores, 97.5)),
+        "prob_improvement": float(np.mean(deltas > 0.0)),
+    }
+
+
+def align_predictions(
+    docs: Sequence[CanonicalDocument],
+    predictions: Sequence[PredictionRecord],
+    expected_split: str | None = None,
+    allow_subset: bool = False,
+) -> list[PredictionRecord]:
+    """Verify and align predictions to canonical documents by doc_id.
+
+    Rejects duplicate prediction document IDs, missing document IDs, and (unless allow_subset=True)
+    unexpected extra document IDs. Also verifies split metadata when expected_split is provided.
+    """
+    expected_ids = [d.doc_id for d in docs]
+    if len(expected_ids) != len(set(expected_ids)):
+        raise ValueError("Duplicate document IDs in evaluation documents")
+
+    prediction_ids = [p.doc_id for p in predictions]
+    if len(prediction_ids) != len(set(prediction_ids)):
+        raise ValueError("Duplicate prediction document IDs")
+
+    by_id = {p.doc_id: p for p in predictions}
+    if allow_subset:
+        missing = set(expected_ids) - set(by_id)
+        if missing:
+            raise ValueError(f"Prediction mismatch: {len(missing)} missing, 0 unexpected")
+    else:
+        if set(expected_ids) != set(by_id):
+            missing = set(expected_ids) - set(by_id)
+            extra = set(by_id) - set(expected_ids)
+            raise ValueError(
+                f"Prediction mismatch: {len(missing)} missing, "
+                f"{len(extra)} unexpected"
+            )
+
+    aligned = [by_id[doc_id] for doc_id in expected_ids]
+    if expected_split is not None:
+        mismatched_splits = {p.split for p in aligned if p.split != expected_split}
+        if mismatched_splits:
+            raise ValueError(
+                f"Prediction split mismatch: expected {expected_split!r}, found {sorted(mismatched_splits)}"
+            )
+    return aligned
+
+
+def verify_experiment_manifest(
+    manifest: dict[str, Any],
+    expected_split: str,
+    expected_prompt_id: str,
+    expected_eval_docs: Sequence[CanonicalDocument] | None = None,
+    expected_base_model: str | None = None,
+) -> dict[str, Any]:
+    """Verify that a replay or live experiment manifest matches the active evaluation configuration."""
+    required_keys = {
+        "experiment_id",
+        "base_model",
+        "prompt_id",
+        "training_split",
+        "evaluation_split",
+        "seed",
+    }
+    missing_keys = required_keys - set(manifest.keys())
+    if missing_keys:
+        raise ValueError(f"Replay manifest mismatch: missing required keys {sorted(missing_keys)}")
+
+    if manifest["evaluation_split"] != expected_split:
+        raise ValueError(
+            f"Replay manifest mismatch: evaluation_split={manifest['evaluation_split']!r} "
+            f"does not match expected {expected_split!r}"
+        )
+
+    if str(manifest["prompt_id"]).lower() != expected_prompt_id.lower():
+        raise ValueError(
+            f"Replay manifest mismatch: prompt_id={manifest['prompt_id']!r} "
+            f"does not match expected {expected_prompt_id!r}"
+        )
+
+    if expected_base_model is not None and manifest["base_model"] != expected_base_model:
+        raise ValueError(
+            f"Replay manifest mismatch: base_model={manifest['base_model']!r} "
+            f"does not match expected {expected_base_model!r}"
+        )
+
+    if expected_eval_docs is not None:
+        expected_ids = [d.doc_id for d in expected_eval_docs]
+        if "evaluation_num_docs" in manifest and int(manifest["evaluation_num_docs"]) != len(expected_ids):
+            raise ValueError(
+                f"Replay manifest mismatch: evaluation_num_docs={manifest['evaluation_num_docs']} "
+                f"does not match len(eval_docs)={len(expected_ids)}"
+            )
+        if "evaluation_doc_ids" in manifest and list(manifest["evaluation_doc_ids"]) != expected_ids:
+            raise ValueError(
+                "Replay manifest mismatch: evaluation_doc_ids do not match expected evaluation documents"
+            )
+
+    return manifest
+
+
 def compute_java_fscore_micro_f1(entries: Sequence[tuple[str, str]]) -> dict[str, Any]:
     """Exact port of `de.germeval2017.Evaluation.EvaluationUtil.Fscore.java`.
 
@@ -307,6 +487,80 @@ def evaluate_task_c_predictions(
             "total_latency_ms": total_latency_ms,
             "mean_latency_ms_per_doc": total_latency_ms / n_docs if n_docs else 0.0,
         },
+    }
+
+
+def compare_task_c_models(
+    canonical_docs: Sequence[CanonicalDocument],
+    baseline_preds: Sequence[PredictionRecord],
+    ft_preds: Sequence[PredictionRecord],
+    expected_split: str | None = None,
+    apply_gold_typo_patches: bool = False,
+    n_bootstrap: int = 1000,
+    seed: int = 42,
+) -> dict[str, Any]:
+    """Align baseline and fine-tuned predictions to canonical_docs and compute paired metrics + ΔF1 bootstrap CIs."""
+    aligned_b = align_predictions(canonical_docs, baseline_preds, expected_split=expected_split)
+    aligned_q = align_predictions(canonical_docs, ft_preds, expected_split=expected_split)
+
+    b_metrics = evaluate_task_c_predictions(
+        canonical_docs, aligned_b, apply_gold_typo_patches=apply_gold_typo_patches, n_bootstrap=n_bootstrap
+    )
+    q_metrics = evaluate_task_c_predictions(
+        canonical_docs, aligned_q, apply_gold_typo_patches=apply_gold_typo_patches, n_bootstrap=n_bootstrap
+    )
+
+    gold_c1: list[set[str]] = []
+    gold_c2: list[set[str]] = []
+    for doc in canonical_docs:
+        if apply_gold_typo_patches:
+            from germeval_llm.convert import extract_task_c_label_sets
+
+            g_lbls, g_cats = extract_task_c_label_sets(doc, apply_typo_patches=True)
+            gold_c1.append(set(g_cats))
+            gold_c2.append(set(g_lbls))
+        else:
+            gold_c1.append({op.category for op in doc.opinions})
+            gold_c2.append({f"{op.category}:{op.polarity}" for op in doc.opinions})
+
+    b_c2_sets = [set(p.parsed_labels) for p in aligned_b]
+    b_c1_sets = [{lbl.split(":", 1)[0] for lbl in s} for s in b_c2_sets]
+    q_c2_sets = [set(p.parsed_labels) for p in aligned_q]
+    q_c1_sets = [{lbl.split(":", 1)[0] for lbl in s} for s in q_c2_sets]
+
+    c1_paired_ci = paired_bootstrap_delta_f1_ci(
+        gold_c1, b_c1_sets, q_c1_sets, n_bootstrap=n_bootstrap, seed=seed
+    )
+    c2_paired_ci = paired_bootstrap_delta_f1_ci(
+        gold_c2, b_c2_sets, q_c2_sets, n_bootstrap=n_bootstrap, seed=seed
+    )
+
+    return {
+        "num_documents": len(canonical_docs),
+        "baseline": b_metrics,
+        "finetuned": q_metrics,
+        "deltas": {
+            "valid_exact_rate": float(q_metrics["valid_exact_rate"] - b_metrics["valid_exact_rate"]),
+            "schema_validity_rate": float(q_metrics["schema_validity_rate"] - b_metrics["schema_validity_rate"]),
+            "c1_strict_micro_f1": float(
+                q_metrics["task_c1_category_strict"]["micro_f1"]
+                - b_metrics["task_c1_category_strict"]["micro_f1"]
+            ),
+            "c2_strict_micro_f1": float(
+                q_metrics["task_c2_category_sentiment_strict"]["micro_f1"]
+                - b_metrics["task_c2_category_sentiment_strict"]["micro_f1"]
+            ),
+            "c2_java_compat_micro_f1": float(
+                q_metrics["task_c2_category_sentiment_java_compat"]["micro_f1"]
+                - b_metrics["task_c2_category_sentiment_java_compat"]["micro_f1"]
+            ),
+            "exact_set_accuracy": float(
+                q_metrics["task_c2_category_sentiment_strict"]["exact_set_accuracy"]
+                - b_metrics["task_c2_category_sentiment_strict"]["exact_set_accuracy"]
+            ),
+        },
+        "paired_bootstrap_c1": c1_paired_ci,
+        "paired_bootstrap_c2": c2_paired_ci,
     }
 
 

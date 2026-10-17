@@ -244,3 +244,315 @@ def save_json(data: dict[str, Any], path: str | Path) -> Path:
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return out
+
+
+PARSE_STATUS_DESCRIPTIONS: dict[str, str] = {
+    "VALID_EXACT": "Exact JSON object",
+    "VALID_FENCED": "Markdown-fenced JSON (recoverable)",
+    "INVALID_JSON": "JSON parsing error (unrecoverable)",
+    "INVALID_SCHEMA": "Schema violation (missing/non-list 'labels')",
+    "UNKNOWN_LABEL": "Unknown taxonomy label (outside 19 categories)",
+}
+
+
+def select_pedagogical_error_analysis_examples(
+    canonical_docs: Sequence[CanonicalDocument],
+    baseline_preds: Sequence[PredictionRecord],
+    ft_preds: Sequence[PredictionRecord],
+    apply_gold_typo_patches: bool = True,
+) -> list[dict[str, Any]]:
+    """Deterministically select 5 diagnostic examples for pedagogical error analysis.
+
+    Document-level correctness is defined strictly as exact set match:
+        correct(d) = 1[Y_hat_d == Y_d]
+    where Y_d is the gold set of 'Category:polarity' pairs.
+
+    Archetypes:
+      1. Baseline error corrected (0-shot ❌ -> Fine-tuned ✅)
+      2. Both models exact match (0-shot ✅ -> Fine-tuned ✅)
+      3. Both models fail (0-shot ❌ -> Fine-tuned ❌)
+      4. Fine-tuning introduces an error (0-shot ✅ -> Fine-tuned ❌)
+      5. Output-format / schema issue fixed (Baseline non-VALID_EXACT -> Fine-tuned VALID_EXACT)
+
+    If an archetype does not occur in the evaluation slice, returns an explicit
+    'available': False entry rather than forcing an inappropriate example or failing.
+    """
+    from germeval_llm.convert import extract_task_c_label_sets
+    from germeval_llm.evaluation import align_predictions
+
+    aligned_b = align_predictions(canonical_docs, baseline_preds)
+    aligned_q = align_predictions(canonical_docs, ft_preds)
+
+    candidates: list[dict[str, Any]] = []
+    for doc, bp, qp in zip(canonical_docs, aligned_b, aligned_q):
+        if apply_gold_typo_patches:
+            gold_list, _ = extract_task_c_label_sets(doc, apply_typo_patches=True)
+        else:
+            gold_list = sorted({f"{op.category}:{op.polarity}" for op in doc.opinions})
+        gold_set = set(gold_list)
+        b_set = set(bp.parsed_labels)
+        q_set = set(qp.parsed_labels)
+
+        b_schema_ok = bp.parse_status in ("VALID_EXACT", "VALID_FENCED")
+        q_schema_ok = qp.parse_status in ("VALID_EXACT", "VALID_FENCED")
+        b_exact = b_schema_ok and (b_set == gold_set)
+        q_exact = q_schema_ok and (q_set == gold_set)
+
+        candidates.append(
+            {
+                "doc": doc,
+                "bp": bp,
+                "qp": qp,
+                "gold_list": gold_list,
+                "gold_set": gold_set,
+                "b_list": sorted(b_set),
+                "q_list": sorted(q_set),
+                "b_exact": b_exact,
+                "q_exact": q_exact,
+                "b_partial_tp": len(gold_set & b_set),
+                "q_partial_tp": len(gold_set & q_set),
+            }
+        )
+
+    used_doc_ids: set[str] = set()
+
+    def _pick(predicate) -> dict[str, Any] | None:
+        for item in candidates:
+            if item["doc"].doc_id not in used_doc_ids and predicate(item):
+                used_doc_ids.add(item["doc"].doc_id)
+                return item
+        return None
+
+    # 1. Baseline error corrected (prefer specific non-Allgemein aspect category first, then non-empty gold)
+    c1 = _pick(
+        lambda x: (not x["b_exact"])
+        and x["q_exact"]
+        and any(not g.startswith("Allgemein:") for g in x["gold_list"])
+    )
+    if c1 is None:
+        c1 = _pick(lambda x: (not x["b_exact"]) and x["q_exact"] and len(x["gold_set"]) > 0)
+    if c1 is None:
+        c1 = _pick(lambda x: (not x["b_exact"]) and x["q_exact"])
+
+    # 2. Both models exact match (prefer non-empty gold)
+    c2 = _pick(lambda x: x["b_exact"] and x["q_exact"] and len(x["gold_set"]) > 0)
+    if c2 is None:
+        c2 = _pick(lambda x: x["b_exact"] and x["q_exact"])
+
+    # 3. Both models fail (prefer cases with non-empty gold)
+    c3 = _pick(lambda x: (not x["b_exact"]) and (not x["q_exact"]) and len(x["gold_set"]) > 0)
+    if c3 is None:
+        c3 = _pick(lambda x: (not x["b_exact"]) and (not x["q_exact"]))
+
+    # 4. Fine-tuning introduces an error (0-shot exact match, fine-tuned not exact match)
+    c4 = _pick(lambda x: x["b_exact"] and (not x["q_exact"]) and len(x["gold_set"]) > 0)
+    if c4 is None:
+        c4 = _pick(lambda x: x["b_exact"] and (not x["q_exact"]))
+
+    # 5. Output-format or schema issue fixed: prioritize unrecoverable parse/schema/label errors first,
+    # then recoverable Markdown-fenced JSON (VALID_FENCED).
+    c5 = _pick(
+        lambda x: x["bp"].parse_status in ("INVALID_JSON", "INVALID_SCHEMA", "UNKNOWN_LABEL")
+        and x["qp"].parse_status == "VALID_EXACT"
+    )
+    if c5 is None:
+        c5 = _pick(
+            lambda x: x["bp"].parse_status != "VALID_EXACT" and x["qp"].parse_status == "VALID_EXACT"
+        )
+    if c5 is None:
+        c5 = _pick(lambda x: x["bp"].parse_status != "VALID_EXACT" or x["qp"].parse_status != "VALID_EXACT")
+
+    archetype_specs = [
+        ("1. Baseline error corrected", c1),
+        ("2. Both models correct", c2),
+        ("3. Both models fail", c3),
+        ("4. Fine-tuning introduces error", c4),
+        ("5. Output-format / schema problem", c5),
+    ]
+
+    rows: list[dict[str, Any]] = []
+    for label, picked in archetype_specs:
+        if picked is None:
+            rows.append(
+                {
+                    "archetype": label,
+                    "available": False,
+                    "doc_id": "UNAVAILABLE",
+                    "input_text": "No document in the current evaluation slice exhibited this pattern.",
+                    "gold_labels": [],
+                    "zero_shot_prediction": [],
+                    "finetuned_prediction": [],
+                    "zero_shot_correct": "N/A",
+                    "finetuned_correct": "N/A",
+                    "zero_shot_format": "N/A",
+                    "finetuned_format": "N/A",
+                    "zero_shot_raw": "",
+                    "finetuned_raw": "",
+                    "zero_shot_errors": [],
+                    "finetuned_errors": [],
+                }
+            )
+            continue
+
+        bp: PredictionRecord = picked["bp"]
+        qp: PredictionRecord = picked["qp"]
+        b_status_desc = PARSE_STATUS_DESCRIPTIONS.get(bp.parse_status, bp.parse_status)
+        q_status_desc = PARSE_STATUS_DESCRIPTIONS.get(qp.parse_status, qp.parse_status)
+
+        def _fmt_correct(is_exact: bool, partial_tp: int, gold_n: int) -> str:
+            if is_exact:
+                return "Yes (exact match)"
+            if partial_tp > 0 and gold_n > 0:
+                return f"No (partial: {partial_tp}/{gold_n} gold matched)"
+            return "No"
+
+        rows.append(
+            {
+                "archetype": label,
+                "available": True,
+                "doc_id": picked["doc"].doc_id,
+                "input_text": picked["doc"].text,
+                "gold_labels": picked["gold_list"],
+                "zero_shot_prediction": picked["b_list"],
+                "finetuned_prediction": picked["q_list"],
+                "zero_shot_correct": _fmt_correct(
+                    picked["b_exact"], picked["b_partial_tp"], len(picked["gold_set"])
+                ),
+                "finetuned_correct": _fmt_correct(
+                    picked["q_exact"], picked["q_partial_tp"], len(picked["gold_set"])
+                ),
+                "zero_shot_format": f"{bp.parse_status} ({b_status_desc})",
+                "finetuned_format": f"{qp.parse_status} ({q_status_desc})",
+                "zero_shot_raw": bp.raw_output,
+                "finetuned_raw": qp.raw_output,
+                "zero_shot_errors": list(bp.parse_errors),
+                "finetuned_errors": list(qp.parse_errors),
+            }
+        )
+    return rows
+
+
+def plot_training_and_validation_loss(
+    train_history: Sequence[dict[str, Any]],
+    eval_history: Sequence[dict[str, Any]] | None = None,
+    title: str = "Supervised Instruction Fine-Tuning: Completion Loss Across Optimization Steps",
+    out_path: str | Path | None = None,
+) -> plt.Figure:
+    """Plot training loss and validation loss series at their respective logging steps."""
+    setup_plot_style()
+    fig, ax1 = plt.subplots(figsize=(8.8, 4.4))
+
+    if train_history:
+        t_steps = [int(e["step"]) for e in train_history]
+        t_losses = [float(e["loss"]) for e in train_history]
+        ax1.plot(
+            t_steps,
+            t_losses,
+            marker="o",
+            linewidth=2.0,
+            color="#1f77b4",
+            label="Training completion loss (batch avg)",
+        )
+
+    if eval_history:
+        e_steps = [int(e["step"]) for e in eval_history]
+        e_losses = [float(e["eval_loss"]) for e in eval_history]
+        ax1.plot(
+            e_steps,
+            e_losses,
+            marker="s",
+            linestyle="--",
+            linewidth=2.0,
+            color="#d95f02",
+            label="Validation completion loss (dev split)",
+        )
+
+    ax1.set_title(title)
+    ax1.set_xlabel("Optimization Step")
+    ax1.set_ylabel("Cross-Entropy Loss (Completion Tokens Only)")
+    ax1.legend(loc="upper right", frameon=True)
+    plt.tight_layout()
+
+    if out_path is not None:
+        out = Path(out_path)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(out)
+    return fig
+
+
+def plot_before_after_metrics_comparison(
+    comparison: dict[str, Any],
+    method_label: str = "Fine-Tuned Adapter",
+    out_path: str | Path | None = None,
+) -> plt.Figure:
+    """Plot grouped bar chart comparing Zero-Shot baseline vs. Fine-Tuned model on core Task C metrics."""
+    setup_plot_style()
+    b = comparison["baseline"]
+    q = comparison["finetuned"]
+
+    metrics_spec = [
+        ("Valid JSON\n(Exact)", b["valid_exact_rate"], q["valid_exact_rate"]),
+        ("Schema\nValidity", b["schema_validity_rate"], q["schema_validity_rate"]),
+        (
+            "Category F1\n(Task C1)",
+            b["task_c1_category_strict"]["micro_f1"],
+            q["task_c1_category_strict"]["micro_f1"],
+        ),
+        (
+            "Category + Sentiment F1\n(Task C2)",
+            b["task_c2_category_sentiment_strict"]["micro_f1"],
+            q["task_c2_category_sentiment_strict"]["micro_f1"],
+        ),
+    ]
+
+    labels = [m[0] for m in metrics_spec]
+    b_vals = [float(m[1]) for m in metrics_spec]
+    q_vals = [float(m[2]) for m in metrics_spec]
+
+    import numpy as np
+
+    x = np.arange(len(labels))
+    width = 0.35
+
+    fig, ax = plt.subplots(figsize=(9.0, 4.6))
+    rects1 = ax.bar(x - width / 2, b_vals, width, label="Zero-Shot Baseline (P1)", color="#8c96c6")
+    rects2 = ax.bar(x + width / 2, q_vals, width, label=f"Fine-Tuned ({method_label})", color="#2b8cbe")
+
+    for r1, r2 in zip(rects1, rects2):
+        h1 = r1.get_height()
+        h2 = r2.get_height()
+        delta = h2 - h1
+        ax.text(
+            r1.get_x() + r1.get_width() / 2.0,
+            h1 + 0.015,
+            f"{h1:.2f}",
+            ha="center",
+            va="bottom",
+            fontsize=8.5,
+        )
+        ax.text(
+            r2.get_x() + r2.get_width() / 2.0,
+            h2 + 0.015,
+            f"{h2:.2f}\n({delta:+.2f})",
+            ha="center",
+            va="bottom",
+            fontsize=8.5,
+            fontweight="bold",
+        )
+
+    ax.set_ylim(0, 1.16)
+    ax.set_ylabel("Score / Proportion (0.0 – 1.0)")
+    ax.set_title(
+        f"Before vs. After Instruction Fine-Tuning (n = {comparison['num_documents']} evaluation documents)"
+    )
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels)
+    ax.legend(loc="lower right", frameon=True)
+    plt.tight_layout()
+
+    if out_path is not None:
+        out = Path(out_path)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(out)
+    return fig
+
