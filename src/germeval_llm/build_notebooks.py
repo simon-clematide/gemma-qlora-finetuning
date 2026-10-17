@@ -727,7 +727,7 @@ def get_notebooks_spec() -> dict[str, list]:
                 "        os.system(f'git clone {REPO_URL}')\n"
                 "    if Path('gemma-qlora-finetuning/pyproject.toml').exists():\n"
                 "        os.chdir('gemma-qlora-finetuning')\n"
-                "    os.system('pip install -q -e \".[ml]\"')\n\n"
+                "    os.system('pip install -q -U \"bitsandbytes>=0.46.1\" -e \".[ml,cuda]\"')\n\n"
                 "ROOT = Path.cwd().resolve()\n"
                 "if ROOT.name == 'notebooks':\n"
                 "    ROOT = ROOT.parent\n"
