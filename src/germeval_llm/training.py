@@ -257,15 +257,25 @@ def run_sft_adapter_training(
     peft_config = build_peft_lora_config(cfg)
     model = get_peft_model(model, peft_config)
 
-    # Ensure all non-4bit parameters (including trainable LoRA weights, embeddings, norms) and buffers match compute_dtype
-    # (float16 on Turing T4, bfloat16 on Ampere+ L4/A100) so there are zero bfloat16 tensors on T4 GPUs.
-    if hw["device"] != "cpu":
-        for param in model.parameters():
-            if param.__class__.__name__ != "Params4bit" and param.dtype != compute_dtype:
-                param.data = param.data.to(compute_dtype)
-        for buf in model.buffers():
+    def _sanitize_model_dtypes(target_model: Any) -> None:
+        if hw["device"] == "cpu":
+            return
+        # On Ampere+ (bf16_supported=True), all non-4bit params and trainable LoRA weights use bfloat16.
+        # On Turing T4 (bf16_supported=False), frozen non-4bit params (embed_tokens/lm_head, RMSNorm) use float16
+        # so TRL's fused chunked_logprob kernel runs in float16, while trainable LoRA weights use float32 to prevent
+        # gradient underflow without GradScaler and to override SFTTrainer.__init__'s hardcoded .to(torch.bfloat16).
+        trainable_dtype = torch.bfloat16 if hw["bf16_supported"] else torch.float32
+        for param in target_model.parameters():
+            if param.__class__.__name__ == "Params4bit":
+                continue
+            desired = trainable_dtype if param.requires_grad else compute_dtype
+            if param.dtype != desired:
+                param.data = param.data.to(desired)
+        for buf in target_model.buffers():
             if buf.dtype.is_floating_point and buf.dtype != compute_dtype:
                 buf.data = buf.data.to(compute_dtype)
+
+    _sanitize_model_dtypes(model)
 
     budget = compute_training_budget(
         num_examples=len(raw_train_rows),
@@ -295,8 +305,8 @@ def run_sft_adapter_training(
         optim=str(tcfg.get("optim", "paged_adamw_8bit")) if hw["cuda_available"] else "adamw_torch",
         weight_decay=float(tcfg.get("weight_decay", 0.01)),
         # Only enable bf16 on Ampere+ GPUs (CC >= 8.0, e.g. L4/A100).
-        # On Turing GPUs like T4 (CC 7.5), base/4-bit compute already runs in float16 via compute_dtype=torch.float16,
-        # so keeping fp16=False avoids PyTorch AMP GradScaler's BFloat16 unscale NotImplementedError.
+        # On Turing GPUs like T4 (CC 7.5), base/4-bit compute runs in float16 via compute_dtype=torch.float16
+        # and trainable LoRA weights run in float32 with fp16=False.
         bf16=hw["bf16_supported"] and hw["cuda_available"],
         fp16=False,
         logging_steps=max(1, max_steps // 10),
@@ -315,6 +325,10 @@ def run_sft_adapter_training(
         eval_dataset=hf_dev,
         args=sft_config,
     )
+    # CRITICAL: trl's SFTTrainer.__init__ (line 287) unconditionally casts all trainable parameters of quantized
+    # models to torch.bfloat16 (`if _is_quantized_model: param.data = param.data.to(torch.bfloat16)`), ignoring
+    # whether the GPU supports bfloat16. Re-sanitize trainer.model after SFTTrainer.__init__ before trainer.train().
+    _sanitize_model_dtypes(trainer.model)
 
     t0 = time.perf_counter()
     train_res = trainer.train()

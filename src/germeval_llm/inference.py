@@ -116,6 +116,14 @@ def load_gemma_model_and_tokenizer(
 
         model = PeftModel.from_pretrained(model, str(adapter_path))
 
+    if hw["device"] != "cpu":
+        for param in model.parameters():
+            if param.__class__.__name__ != "Params4bit" and param.dtype != compute_dtype:
+                param.data = param.data.to(compute_dtype)
+        for buf in model.buffers():
+            if buf.dtype.is_floating_point and buf.dtype != compute_dtype:
+                buf.data = buf.data.to(compute_dtype)
+
     model.eval()
     return model, tokenizer
 
