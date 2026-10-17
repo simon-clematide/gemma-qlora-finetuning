@@ -85,10 +85,13 @@ def load_gemma_model_and_tokenizer(
         import transformers.utils.import_utils as iu
 
         importlib.invalidate_caches()
+        if hasattr(iu.is_bitsandbytes_available, "cache_clear"):
+            iu.is_bitsandbytes_available.cache_clear()
         if not iu.is_bitsandbytes_available():
             subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "-U", "bitsandbytes>=0.46.1"])
             importlib.invalidate_caches()
-            iu._bitsandbytes_available = iu._is_package_available("bitsandbytes")
+            if hasattr(iu.is_bitsandbytes_available, "cache_clear"):
+                iu.is_bitsandbytes_available.cache_clear()
 
         from transformers import BitsAndBytesConfig
 
