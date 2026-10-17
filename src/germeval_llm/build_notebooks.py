@@ -745,14 +745,17 @@ def get_notebooks_spec() -> dict[str, list]:
             ),
             new_markdown_cell(
                 "### Authenticate with Hugging Face Hub (for gated `google/gemma-2-2b-it`)\n"
-                "Run `login(new_session=True)` below and paste your Hugging Face access token (`new_session=True` ensures Colab prompts you even if an older `HF_TOKEN` secret is cached in the runtime):"
+                "Run `login(skip_if_logged_in=False)` below and paste your Hugging Face access token (`skip_if_logged_in=False` forces a fresh prompt even if an older token is cached in the runtime):"
             ),
             new_code_cell(
                 "import os\n"
                 "from huggingface_hub import login\n\n"
                 "os.environ.pop('HF_TOKEN', None)\n"
                 "os.environ.pop('HUGGING_FACE_HUB_TOKEN', None)\n"
-                "login(new_session=True)"
+                "try:\n"
+                "    login(skip_if_logged_in=False)\n"
+                "except TypeError:\n"
+                "    login(new_session=True)"
             ),
             new_markdown_cell(
                 "---\n"
