@@ -1,5 +1,7 @@
 # GermEval 2017 ABSA: Prompting vs. LoRA vs. QLoRA (Gemma Instruct)
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/simon-clematide/gemma-qlora-finetuning/blob/main/notebooks/11_colab_l4_live_demo.ipynb)
+
 Reproducible CAS fine-tuning demonstration comparing zero-shot prompting (`P0`, `P1`), few-shot in-context learning (`P2`, `P3`), 16-bit LoRA (`L1`), and 4-bit NF4 QLoRA (`Q1–Q3`, `D2`, `J1`) on **GermEval 2017 Shared Task on Aspect-based Sentiment in Social Media Customer Feedback**:
 - **Task C (Core):** Document-level multi-label aspect category (`C1`, 19 categories) and aspect+polarity (`C2`, 57 `Category:Polarity` pairs) classification.
 - **Task D (Extension):** Opinion Target Expression (OTE) extraction via **verbatim target-string generation** followed by deterministic software span alignment (`alignment.py`) for official XML evaluation.

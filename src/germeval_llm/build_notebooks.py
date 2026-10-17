@@ -709,6 +709,7 @@ def get_notebooks_spec() -> dict[str, list]:
         ],
         "11_colab_l4_live_demo.ipynb": [
             new_markdown_cell(
+                "[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/simon-clematide/gemma-qlora-finetuning/blob/main/notebooks/11_colab_l4_live_demo.ipynb)\n\n"
                 "# `11_colab_l4_live_demo.ipynb` — End-to-End Live QLoRA / LoRA Fine-Tuning & Test-Set Evaluation on Google Colab (L4 / T4 GPU)\n\n"
                 "This self-contained notebook is designed to run **live on a Google Colab L4 GPU (`24 GB VRAM`) or free T4 GPU (`15 GB VRAM`)** (or locally on CUDA / Apple Silicon `mps`).\n"
                 "- **Zero live XML preprocessing needed:** The repository includes all 26,209 canonical GermEval 2017 documents in compact `data/canonical/*.jsonl.gz` archives (`5 MB` total) and automatically materializes the Task C and Task D JSONL files in ~1.5 seconds.\n"
