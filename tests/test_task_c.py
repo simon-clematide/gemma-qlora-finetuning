@@ -372,3 +372,56 @@ def test_consistent_fences_do_not_reduce_label_scores() -> None:
     assert metrics[0]["task_c2_category_sentiment_strict"]["micro_f1"] == 1.0
     assert metrics[0]["schema_validity_rate"] == metrics[1]["schema_validity_rate"] == 1.0
     assert metrics[0]["valid_exact_rate"] == 1.0 and metrics[1]["valid_exact_rate"] == 0.0
+
+
+def test_demo_access_blocks_before_setup_and_skips_replay(monkeypatch) -> None:
+    """Exercise the first cell without credentials, network, or an ML installation."""
+    import importlib.util
+    import sys
+    from types import ModuleType, SimpleNamespace
+
+    import nbformat
+    import pytest
+
+    nb = nbformat.read('notebooks/11_colab_l4_live_demo.ipynb', as_version=4)
+    access = next(cell.source for cell in nb.cells if cell.cell_type == 'code')
+    calls = []
+    hub = ModuleType('huggingface_hub')
+    hub.get_token = lambda: None
+    hub.login = lambda **kwargs: calls.append('login')
+    hub.HfApi = lambda: SimpleNamespace(auth_check=lambda *args, **kwargs: calls.append('check'))
+    torch = ModuleType('torch')
+    torch.cuda = SimpleNamespace(is_available=lambda: True)
+    monkeypatch.setitem(sys.modules, 'huggingface_hub', hub)
+    monkeypatch.setitem(sys.modules, 'torch', torch)
+    original_find_spec = importlib.util.find_spec
+    monkeypatch.setattr(importlib.util, 'find_spec', lambda name: (
+        True if name in {'torch', 'huggingface_hub'} else original_find_spec(name)
+    ))
+    monkeypatch.setattr('getpass.getpass', lambda prompt: calls.append('hidden prompt') or 'test-only-token')
+
+    scope = {}
+    exec(access, scope)
+    assert scope['RUN_LIVE_GPU'] is True
+    assert calls == ['hidden prompt', 'check', 'login']
+    assert '_access_token' not in scope
+
+    calls.clear()
+    hub.get_token = lambda: 'test-only-saved-token'
+    exec(access, {})
+    assert calls == ['check', 'login']
+
+    def denied(*args, **kwargs):
+        raise ValueError('sensitive error detail')
+
+    hub.HfApi = lambda: SimpleNamespace(auth_check=denied)
+    scope = {}
+    with pytest.raises(RuntimeError, match='Setup has not started'):
+        exec(access, scope)
+    assert '_access_token' not in scope
+
+    calls.clear()
+    scope = {}
+    exec(access.replace("REQUESTED_MODE = 'auto'", "REQUESTED_MODE = 'replay'", 1), scope)
+    assert scope['RUN_LIVE_GPU'] is False
+    assert calls == []
