@@ -211,6 +211,8 @@ def select_few_shot_examples_task_c(
     seed: int = 42,
 ) -> list[TaskCExample]:
     """Select deterministic few-shot demonstrations from training examples only."""
+    if any(ex.source_split != "train" for ex in train_examples):
+        raise ValueError("Few-shot demonstrations must come from the training split")
     if n_shots <= 0:
         return []
     rng = random.Random(seed)
@@ -252,7 +254,35 @@ def select_few_shot_examples_task_c(
         used_ids.add(best_ex.example_id)
         covered_cats.update(best_ex.gold_categories)
 
+    if len(selected) < n_shots:
+        remaining = [ex for ex in train_examples if ex.example_id not in used_ids]
+        rng.shuffle(remaining)
+        selected.extend(remaining[: n_shots - len(selected)])
     return selected[:n_shots]
+
+
+def select_few_shot_examples_task_d(
+    train_examples: list[TaskDExample],
+    n_shots: int,
+    strategy: Literal["uniform", "stratified_diverse"] = "stratified_diverse",
+    seed: int = 42,
+) -> list[TaskDExample]:
+    """Select training-only target-string demonstrations using Task C's category sampler."""
+    if any(ex.source_split != "train" for ex in train_examples):
+        raise ValueError("Few-shot demonstrations must come from the training split")
+    category_views = [
+        TaskCExample(
+            **ex.model_dump(exclude={"view", "gold_targets"}),
+            gold_labels=sort_task_c_labels(
+                {f"{item.category}:{item.polarity}" for item in ex.gold_targets}
+            ),
+            gold_categories=sorted({item.category for item in ex.gold_targets}),
+        )
+        for ex in train_examples
+    ]
+    selected = select_few_shot_examples_task_c(category_views, n_shots, strategy, seed)
+    by_id = {ex.example_id: ex for ex in train_examples}
+    return [by_id[ex.example_id] for ex in selected]
 
 
 def sample_learning_curve_subset(

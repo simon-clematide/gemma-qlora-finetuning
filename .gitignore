@@ -16,3 +16,9 @@ results/predictions/*.tsv
 models/adapters/*
 !models/adapters/.gitkeep
 .DS_Store
+
+# Explicitly generated synthetic teaching benchmarks
+results/simulations/
+
+# Complete local experiment bundles include weights, expanded data, and source snapshots
+results/recorded_runs/

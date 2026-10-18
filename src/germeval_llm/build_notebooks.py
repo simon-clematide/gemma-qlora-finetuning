@@ -1,4 +1,4 @@
-"""Generate and execute all 12 CAS demonstration notebooks (00_environment to 11_colab_l4_live_demo)
+"""Generate and optionally execute CAS notebooks 00–10; preserve separately maintained notebook 11
 with comprehensive pedagogical explanations, mathematical derivations, inline visualizations,
 pure-Python evaluation demos, and interactive student exercises.
 """
@@ -44,7 +44,7 @@ def _build_notebook(cells: list) -> nbformat.NotebookNode:
 
 
 def get_notebooks_spec() -> dict[str, list]:
-    return {
+    specs = {
         "00_environment.ipynb": [
             new_markdown_cell(
                 "# `00_environment.ipynb` — Environment, Gemma Architecture & Reproducibility\n\n"
@@ -330,7 +330,7 @@ def get_notebooks_spec() -> dict[str, list]:
                 "Now let's compare the full prompting ladder (`P0` through `P3`) on `dev_v1.4`:"
             ),
             new_code_cell(
-                "bench = pd.read_csv('results/metrics/benchmark.csv')\n"
+                "bench = pd.read_csv('results/simulations/metrics/benchmark.csv')\n"
                 "prompt_bench = bench[bench['run_id'].str.startswith('P') & (bench['split'] == 'dev')]\n"
                 "display(prompt_bench[['run_id', 'c1_strict_micro_f1', 'c2_strict_micro_f1', 'c2_strict_macro_f1', 'exact_set_accuracy', 'schema_validity_rate', 'prompt_tokens_per_1k_docs']])"
             ),
@@ -427,7 +427,7 @@ def get_notebooks_spec() -> dict[str, list]:
                 "assert profile_lora['trainable_parameters'] == live_summary['trainable_parameters'] == 20766720"
             ),
             new_code_cell(
-                "l1_metrics = json.loads(Path('results/metrics/L1_lora_r16.json').read_text())\n"
+                "l1_metrics = json.loads(Path('results/simulations/metrics/L1_lora_r16.json').read_text())\n"
                 "print('L1 Dev Task C2 Strict Micro-F1:', round(l1_metrics['dev']['task_c2_category_sentiment_strict']['micro_f1'], 4))\n"
                 "print('L1 Test-Syn Task C2 Strict Micro-F1:', round(l1_metrics['test_syn']['task_c2_category_sentiment_strict']['micro_f1'], 4))\n"
                 "print('L1 Test-Dia Task C2 Strict Micro-F1:', round(l1_metrics['test_dia']['task_c2_category_sentiment_strict']['micro_f1'], 4))"
@@ -497,7 +497,7 @@ def get_notebooks_spec() -> dict[str, list]:
                 "display(df_mem[['quantization', 'lora_rank', 'trainable_parameters', 'trainable_percent', 'base_weights_mb', 'adapter_checkpoint_mb', 'estimated_peak_vram_mb']])"
             ),
             new_code_cell(
-                "bench = pd.read_csv('results/metrics/benchmark.csv')\n"
+                "bench = pd.read_csv('results/simulations/metrics/benchmark.csv')\n"
                 "display(bench[bench['run_id'].isin(['P3_dev_optimized_10shot', 'L1_lora_r16', 'Q1_qlora_r16'])])"
             ),
             new_markdown_cell(
@@ -539,10 +539,10 @@ def get_notebooks_spec() -> dict[str, list]:
             ),
             new_code_cell(SETUP_SNIPPET),
             new_code_cell(
-                "lc = pd.read_csv('results/metrics/learning_curves_q2.csv')\n"
+                "lc = pd.read_csv('results/simulations/metrics/learning_curves_q2.csv')\n"
                 "summary_lc = lc.groupby(['train_examples', 'sampling_strategy', 'optimizer_steps', 'effective_epochs'])[['task_c2_micro_f1', 'task_c2_macro_f1', 'gpu_minutes']].mean().reset_index()\n"
                 "display(summary_lc)\n"
-                "display(Image(filename='results/figures/learning_curve_task_c2.png'))"
+                "display(Image(filename='results/simulations/figures/learning_curve_task_c2.png'))"
             ),
             new_markdown_cell(
                 "### Key Takeaways\n"
@@ -574,7 +574,7 @@ def get_notebooks_spec() -> dict[str, list]:
             ),
             new_code_cell(SETUP_SNIPPET),
             new_code_cell(
-                "td = json.loads(Path('results/metrics/task_d_summary.json').read_text())\n"
+                "td = json.loads(Path('results/simulations/metrics/task_d_summary.json').read_text())\n"
                 "rows = []\n"
                 "for run_id, sp_dict in td.items():\n"
                 "    for sp, m in sp_dict.items():\n"
@@ -634,9 +634,9 @@ def get_notebooks_spec() -> dict[str, list]:
             ),
             new_code_cell(SETUP_SNIPPET),
             new_code_cell(
-                "bench = pd.read_csv('results/metrics/benchmark.csv')\n"
+                "bench = pd.read_csv('results/simulations/metrics/benchmark.csv')\n"
                 "display(bench)\n\n"
-                "rec = json.loads(Path('results/metrics/official_java_reconciliation.json').read_text())\n"
+                "rec = json.loads(Path('results/simulations/metrics/official_java_reconciliation.json').read_text())\n"
                 "print('\\nPure-Python Java-Compat Scorer vs. Official EvaluationScript.jar (6-decimal agreement):')\n"
                 "display(pd.DataFrame(rec['reconciliations']))"
             ),
@@ -678,8 +678,8 @@ def get_notebooks_spec() -> dict[str, list]:
             ),
             new_code_cell(SETUP_SNIPPET),
             new_code_cell(
-                "display(Image(filename='results/figures/error_analysis_delta_f1.png'))\n\n"
-                "quad = json.loads(Path('results/metrics/error_analysis_quadrants_test_syn.json').read_text())\n"
+                "display(Image(filename='results/simulations/figures/error_analysis_delta_f1.png'))\n\n"
+                "quad = json.loads(Path('results/simulations/metrics/error_analysis_quadrants_test_syn.json').read_text())\n"
                 "print('Paired Document Exact-Set Quadrants on test_syn (P3 10-shot vs Q1 QLoRA):')\n"
                 "print(json.dumps({k: v for k, v in quad.items() if k != 'sample_qlora_wins' and k != 'sample_prompt_wins'}, indent=2))\n"
                 "print('\\nSample documents where QLoRA succeeded and Prompting failed:')\n"
@@ -688,7 +688,7 @@ def get_notebooks_spec() -> dict[str, list]:
             ),
             new_code_cell(
                 "# Synchronic (test_syn) vs Diachronic (test_dia) generalization comparison\n"
-                "bench = pd.read_csv('results/metrics/benchmark.csv')\n"
+                "bench = pd.read_csv('results/simulations/metrics/benchmark.csv')\n"
                 "piv = bench[bench['run_id'].isin(['P1_guidelines_0shot', 'P3_dev_optimized_10shot', 'L1_lora_r16', 'Q1_qlora_r16'])].pivot(\n"
                 "    index='run_id', columns='split', values='c2_strict_micro_f1'\n"
                 ")[['dev', 'test_syn', 'test_dia']]\n"
@@ -1497,6 +1497,17 @@ def get_notebooks_spec() -> dict[str, list]:
         ],
     }
 
+    for name, cells in specs.items():
+        if 4 <= int(name[:2]) <= 10:
+            cells.insert(1, new_markdown_cell(
+                "**Simulation provenance:** Full benchmark tables and learning curves in this notebook "
+                "are synthetic teaching examples from `results/simulations/`, not measured model results. "
+                "Prepare them explicitly with `uv run python -m germeval_llm.pipeline --simulate` "
+                "(requires historical inputs and Java). Separately identified live smoke results "
+                "remain in their original paths."
+            ))
+    return specs
+
 
 def build_and_execute_all_notebooks(
     notebooks_dir: str | Path = "notebooks",
@@ -1507,6 +1518,8 @@ def build_and_execute_all_notebooks(
     specs = get_notebooks_spec()
 
     for nb_name, cells in specs.items():
+        if nb_name == "11_colab_l4_live_demo.ipynb":
+            continue  # Maintained separately; preserve its recorded classroom replay outputs.
         nb = _build_notebook(cells)
         nb_path = out_dir / nb_name
         if execute_cells:

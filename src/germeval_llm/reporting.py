@@ -484,6 +484,7 @@ def plot_before_after_metrics_comparison(
     comparison: dict[str, Any],
     method_label: str = "Fine-Tuned Adapter",
     out_path: str | Path | None = None,
+    include_raw_json: bool = True,
 ) -> plt.Figure:
     """Plot grouped bar chart comparing Zero-Shot baseline vs. Fine-Tuned model on core Task C metrics."""
     setup_plot_style()
@@ -491,8 +492,8 @@ def plot_before_after_metrics_comparison(
     q = comparison["finetuned"]
 
     metrics_spec = [
-        ("Valid JSON\n(Exact)", b["valid_exact_rate"], q["valid_exact_rate"]),
-        ("Schema\nValidity", b["schema_validity_rate"], q["schema_validity_rate"]),
+        ("Unwrapped task JSON\n(raw compliance)", b["valid_exact_rate"], q["valid_exact_rate"]),
+        ("Usable task output\n(tolerant parser)", b["schema_validity_rate"], q["schema_validity_rate"]),
         (
             "Category F1\n(Task C1)",
             b["task_c1_category_strict"]["micro_f1"],
@@ -505,6 +506,9 @@ def plot_before_after_metrics_comparison(
         ),
     ]
 
+    if not include_raw_json:
+        metrics_spec = metrics_spec[1:]
+
     labels = [m[0] for m in metrics_spec]
     b_vals = [float(m[1]) for m in metrics_spec]
     q_vals = [float(m[2]) for m in metrics_spec]
@@ -514,9 +518,9 @@ def plot_before_after_metrics_comparison(
     x = np.arange(len(labels))
     width = 0.35
 
-    fig, ax = plt.subplots(figsize=(9.0, 4.6))
+    fig, ax = plt.subplots(figsize=(9.0, 5.4))
     rects1 = ax.bar(x - width / 2, b_vals, width, label="Zero-Shot Baseline (P1)", color="#8c96c6")
-    rects2 = ax.bar(x + width / 2, q_vals, width, label=f"Fine-Tuned ({method_label})", color="#2b8cbe")
+    rects2 = ax.bar(x + width / 2, q_vals, width, label=method_label, color="#2b8cbe")
 
     for r1, r2 in zip(rects1, rects2):
         h1 = r1.get_height()
@@ -547,7 +551,7 @@ def plot_before_after_metrics_comparison(
     )
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
-    ax.legend(loc="lower right", frameon=True)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.20), frameon=True, fontsize=9)
     plt.tight_layout()
 
     if out_path is not None:

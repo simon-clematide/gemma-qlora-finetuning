@@ -315,8 +315,12 @@ def test_colab_live_demo_notebook_replay_integrity() -> None:
                     png_count += 1
     assert png_count >= 2, "Expected loss curve and before/after comparison PNG figures"
 
-    # Verify the recorded classroom manifest and aligned predictions
-    manifest = json.loads(Path("results/runs/classroom_fast_n1000_manifest.json").read_text(encoding="utf-8"))
+    # Verify the portable fresh recording and reproduce its stored comparison.
+    from germeval_llm.replay import DEFAULT_CLASSROOM_REPLAY, load_replay_manifest
+    manifest = load_replay_manifest()
+    assert manifest["hardware"]["device"] == "mps"
+    assert manifest["method"] == "LoRA" and manifest["quantization"] == "none"
+    assert manifest["weights_required_for_replay"] is False
     eval_docs = load_canonical_jsonl("data/canonical/test_syn.jsonl")[: manifest["evaluation_num_docs"]]
     verify_experiment_manifest(
         manifest,
@@ -327,9 +331,44 @@ def test_colab_live_demo_notebook_replay_integrity() -> None:
     )
     b_preds = load_predictions_jsonl(manifest["baseline_prediction_file"])
     q_preds = load_predictions_jsonl(manifest["finetuned_prediction_file"])
-    comp = compare_task_c_models(eval_docs, b_preds, q_preds, expected_split="test_syn", apply_gold_typo_patches=True)
-    assert comp["deltas"]["valid_exact_rate"] > 0.90
-    assert comp["deltas"]["c2_strict_micro_f1"] > 0.30
-    assert comp["paired_bootstrap_c2"]["delta_ci95_low"] > 0.20
+    comp = compare_task_c_models(
+        eval_docs, b_preds, q_preds, expected_split="test_syn",
+        apply_gold_typo_patches=manifest["gold_typo_patches"], seed=manifest["seed"],
+    )
+    expected = json.loads((DEFAULT_CLASSROOM_REPLAY.parent / "comparison.json").read_text())
+    assert comp == expected
+    rendered = "\n".join(
+        "".join(out.get("text", [])) + "".join(out.get("data", {}).get("text/plain", []))
+        for cell in nb.cells if cell.cell_type == "code" for out in cell.outputs
+    )
+    assert manifest["experiment_id"] in rendered
+    assert "Recorded MPS LoRA (bfloat16)" in rendered
+    assert "0.5985" in rendered and "0.1008" in rendered
+    assert "QLoRA (4-bit NF4)" not in rendered
+    assert "classroom_fast_n1000_seed42" not in rendered
 
 
+def test_consistent_fences_do_not_reduce_label_scores() -> None:
+    import lxml.etree as ET
+    from germeval_llm.evaluation import evaluate_task_c_predictions
+    from germeval_llm.schemas import PredictionRecord
+    from germeval_llm.xml_parser import parse_document_element
+
+    doc = parse_document_element(ET.fromstring(
+        '<Document id="d"><text>Der Zug fällt aus.</text><relevance>true</relevance>'
+        '<sentiment>negative</sentiment><Opinions><Opinion category="Zugfahrt#Haupt" '
+        'polarity="negative" target="Zug" from="4" to="7"/></Opinions></Document>'
+    ), source_split="dev", source_ordinal=0)
+    body = '{"labels": ["Zugfahrt:negative"]}'
+    metrics = []
+    for raw in [body, f'```json\n{body}\n```']:
+        labels, status, errors = parse_task_c_output(raw)
+        prediction = PredictionRecord(
+            run_id="wrapper-test", task="C", split="dev", doc_id="d", source_ordinal=0,
+            raw_output=raw, parsed_labels=labels, parse_status=status, parse_errors=errors,
+        )
+        metrics.append(evaluate_task_c_predictions([doc], [prediction], n_bootstrap=10))
+    assert metrics[0]["task_c2_category_sentiment_strict"] == metrics[1]["task_c2_category_sentiment_strict"]
+    assert metrics[0]["task_c2_category_sentiment_strict"]["micro_f1"] == 1.0
+    assert metrics[0]["schema_validity_rate"] == metrics[1]["schema_validity_rate"] == 1.0
+    assert metrics[0]["valid_exact_rate"] == 1.0 and metrics[1]["valid_exact_rate"] == 0.0

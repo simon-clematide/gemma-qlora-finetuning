@@ -53,11 +53,11 @@ See [`finetuning-demo.md`](finetuning-demo.md) for the complete implementation s
 │   ├── reporting.py                # Publication-quality matplotlib figures & summary tables
 │   ├── pipeline.py                 # End-to-end deterministic data & benchmark artifact pipeline
 │   ├── build_notebooks.py          # Generator & executor for notebooks 00 through 10
-│   └── cli.py                      # Command-line interface (prepare-data, infer, train, build-notebooks)
+│   └── cli.py                      # Command-line interface (infer, train, evaluate)
 ├── notebooks/                      # 11 self-contained, executed CAS teaching notebooks (00-10)
 ├── scripts/
 │   └── run_gpu_experiments.sh      # Automated batch runner for full GPU experiments
-└── tests/                          # 14 unit and official Java evaluator integration tests
+└── tests/                          # Unit and official Java evaluator integration tests
 ```
 
 ---
@@ -70,11 +70,12 @@ This project uses [`uv`](https://docs.astral.sh/uv/) with a local `.venv/` insid
 # 1. Create/sync the local .venv with core, dev, and ML (PyTorch/Transformers/PEFT/TRL) packages
 uv sync --extra dev --extra ml
 
-# 2. Link historical GermEval 2017 XML/TSV files and EvaluationScript.jar into data/raw/
-make setup-data
+# 2. Prepare Task C/D datasets from the bundled canonical archives (no raw XML or Java needed)
+uv run python -c 'from germeval_llm.convert import ensure_derived_datasets_ready; ensure_derived_datasets_ready()'
 
-# 3. Run canonical XML conversion, validation audit, and Task C/D instruction dataset derivation
-make data
+# 3. Optional: link historical XML/TSV files and the evaluator, then regenerate data and audits
+make setup-data HISTORICAL_REPO=/absolute/path/to/historical/repo
+make data HISTORICAL_REPO=/absolute/path/to/historical/repo
 
 # 4. Run the full unit and official Java evaluator reconciliation test suite
 uv run pytest -v
@@ -87,6 +88,31 @@ uv run pytest -v
 > `EvaluationScript.jar OTE` (Task D XML evaluation) uses `javax.xml.bind` (JAXB), which requires Java 8. `src/germeval_llm/official_evaluation.py` automatically detects a local Java 8 installation (e.g., `/Library/Internet Plug-Ins/JavaAppletPlugin.plugin/Contents/Home/bin/java` on macOS) when running `OTE` mode.
 
 ---
+
+## Data preparation and simulated teaching artifacts
+
+`make data` regenerates canonical data, audits, derived datasets, and dataset figures from the historical XML. It does not run models or generate benchmark simulations.
+
+To explicitly generate synthetic teaching benchmarks as well, run:
+
+```bash
+uv run python -m germeval_llm.pipeline --simulate
+```
+
+Simulation predictions, metrics, run manifests, and figures are isolated under `results/simulations/`, with simulation provenance recorded there. They require the historical inputs and Java evaluator. They are not measurements from Gemma inference. Existing benchmark tables and figures in the legacy `results/` paths may contain synthetic artifacts; do not interpret them as actual model results. The historical comparison numbers below are illustrative, not validated measurements for the current configuration. Notebook 11 replays the measured 18 October 2026 MPS LoRA run from `results/replays/2026-10-18_mps_lora_n1000_seed42/`, including verified predictions, training history, and provenance.
+
+Actual CLI inference writes per-split predictions and metrics under `results/predictions/` and `results/metrics/`, with matching model, prompt, hardware, and evaluation manifests under `results/runs/`. It does not rebuild aggregate benchmark tables. Only compare matching prediction sets and experiment manifests.
+
+## Fresh classroom run with full provenance
+
+With the ML dependencies, a CUDA/MPS accelerator, and `google/gemma-2-2b-it` already cached, run:
+
+```bash
+PYTHONHASHSEED=42 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 uv run python scripts/run_recorded_classroom.py \
+  --run-dir results/recorded_runs/my_fresh_classroom_run
+```
+
+This generates both prediction sets from scratch, trains a new LoRA adapter for 100 steps on 1,000 examples, and evaluates the first 150 `test_syn` documents. The 1,152-token training limit preserves the complete selected targets; preparation fails if examples or completions would be truncated. It records the pinned model revision, source snapshot, exact train/dev/test IDs, token-level loss masks, raw prompts and responses, training history, actual settings and dtypes, saved adapter, reload checks, independent scoring, figures, and SHA-256 inventory. Complete bundles are local artifacts ignored by Git. This is a single-seed classroom experiment, not a CUDA QLoRA benchmark.
 
 ## Running Inference & Fine-Tuning via CLI
 
@@ -108,8 +134,8 @@ uv run python -m germeval_llm.cli infer \
   --run-id p3_dev_opt \
   --task C \
   --split dev \
-  --prompt-key p3_dev_optimized \
-  --num-shots 5
+  --prompt-key p1_guidelines \
+  --n-shots 5
 ```
 
 ### 2. LoRA & QLoRA Fine-Tuning (`L1`, `Q1`, `Q2`, `D2`)
@@ -143,7 +169,7 @@ uv run python -m germeval_llm.cli train \
 
 ### 3. Full GPU Experiment Suite (`scripts/run_gpu_experiments.sh`)
 
-On a CUDA GPU workstation or server (e.g., NVIDIA L4, RTX 3090/4090, or A100), run the entire experimental matrix (`P0–P3`, `L1`, `Q1`, the 18-run `Q2` learning-curve grid across 6 subset sizes $\times$ 3 seeds, and `D1–D2` Task D extraction + alignment):
+On a CUDA GPU workstation or server (e.g., NVIDIA L4, RTX 3090/4090, or A100), run the implemented experiments: `P0`, `P1`, fixed 10-shot `P3`, `L1`, and `Q1` on dev and both test splits, plus `D1–D2` on dev and `test_syn`. The script does not run P2, learning curves, rank ablations, or joint C+D training:
 
 ```bash
 bash scripts/run_gpu_experiments.sh
@@ -153,7 +179,7 @@ bash scripts/run_gpu_experiments.sh
 
 ## CAS Teaching Notebooks (`notebooks/`)
 
-All 11 notebooks are generated and executed via `make notebooks` (`uv run python -m germeval_llm.cli build-notebooks`):
+Notebooks 00–10 are generated without execution by `make notebooks`. This replaces their existing outputs. To execute them deliberately after preparing the required data and results, use `uv run python -m germeval_llm.build_notebooks --execute`. Newly generated notebooks 04–10 read isolated simulation artifacts and label them as synthetic teaching examples. Existing notebook files retain their recorded outputs until deliberately regenerated. Notebook 11 is maintained separately; the generator leaves it untouched.
 
 | Notebook | Topic & Pedagogical Goal |
 |---|---|
@@ -171,6 +197,12 @@ All 11 notebooks are generated and executed via `make notebooks` (`uv run python
 | [`11_colab_l4_live_demo.ipynb`](notebooks/11_colab_l4_live_demo.ipynb) | **End-to-End Google Colab Pro (L4 GPU) Live Demo:** zero-preprocessing bootstrap, 4-bit NF4 QLoRA training, test-set inference, and pure-Python evaluation |
 
 ---
+
+## Replaying the recorded classroom experiment
+
+Notebook 11 uses the fresh **MPS LoRA** recording: 1,000 training examples, 100 optimizer steps, 150 fixed test documents, and about 92 minutes of recorded training. Its compact replay bundle is included under `results/replays/2026-10-18_mps_lora_n1000_seed42/`; the complete local weights archive is not required. Replay verifies artifact hashes and recorded settings, then recreates the tables and figures without model downloads or training.
+
+Set `REQUESTED_MODE = 'replay'` in the first code cell to replay on any machine, including a CUDA runtime. `auto` runs live on CUDA and replays otherwise. The live quantization switch does not change the recorded LoRA method or replay labels. Live runs generate a new baseline using their selected precision and the pinned model revision.
 
 ## Running Live on Google Colab Pro (NVIDIA L4 GPU)
 
@@ -196,18 +228,18 @@ You can switch seamlessly between **16-bit LoRA** (`load_in_4bit: false`) and **
 | **Activations (with grad ckpt)** | `~2.5 GB` | **`~2.1 GB`** | **`~1.4 GB`** |
 | **Peak Training GPU VRAM** | **`> 33 GB`** (OOM on L4 24GB) | **`~7.2 GB`** | **`~2.9 GB`** |
 | **Relative Step Speed** | Baseline | **Faster (~20% faster than 4-bit)** | Slightly slower (on-the-fly NF4 dequantization) |
-| **Task C2 Strict Micro-F1 (`test_syn`)** | — | **`0.8384`** | **`0.8360`** (`< 0.3` F1 pt difference) |
+| **Illustrative Task C2 Strict Micro-F1 (`test_syn`)** | — | **`0.8384`** | **`0.8360`** (`< 0.3` F1 pt difference) |
 
 ### 2. Practical Guidance
 - **When to use 16-bit `bfloat16` LoRA (`USE_4BIT_QUANTIZATION = False` / `configs/lora.yaml`):**
   - On an **NVIDIA L4 (24 GB VRAM)** or **Apple Silicon MPS**, `google/gemma-2-2b-it` in native 16-bit `bfloat16` requires only `~7.2 GB` of training VRAM.
-  - Because it does not need `bitsandbytes` or on-the-fly 4-bit dequantization during every forward/backward matrix multiplication, **16-bit LoRA is simpler and ~15–25% faster per step**. This is the default in [`notebooks/11_colab_l4_live_demo.ipynb`](notebooks/11_colab_l4_live_demo.ipynb).
+  - Because it does not need `bitsandbytes` or on-the-fly 4-bit dequantization during every forward/backward matrix multiplication, **16-bit LoRA is simpler and ~15–25% faster per step**. The notebook’s replay uses this recorded LoRA method; live execution has a separate quantization switch.
 - **When to use 4-bit `nf4` QLoRA (`USE_4BIT_QUANTIZATION = True` / `configs/qlora.yaml`):**
   - When GPU VRAM is constrained (e.g., free 15 GB Colab T4 with long sequences/large batches) or when scaling up to **9B–27B models** (`google/gemma-2-9b-it` or `google/gemma-3-12b-it`), where 16-bit base weights alone consume `18–24+ GB` VRAM.
   - NormalFloat4 (`nf4`) places its 16 quantization bins at equal-probability quantiles of $\mathcal{N}(0, \sigma^2)$ while keeping LoRA adapters ($A, B$) and matrix multiplications in `bfloat16`, cutting base weight memory by **~72%** with virtually zero accuracy loss.
 
 ### 3. How to Switch Between 16-bit and 4-bit
-- **In [`notebooks/11_colab_l4_live_demo.ipynb`](notebooks/11_colab_l4_live_demo.ipynb) (Step 3):**
+- **In [`notebooks/11_colab_l4_live_demo.ipynb`](notebooks/11_colab_l4_live_demo.ipynb) (first code cell):**
   ```python
   USE_4BIT_QUANTIZATION = False  # False -> 16-bit bfloat16 LoRA (configs/lora.yaml)
                                  # True  -> 4-bit NF4 QLoRA     (configs/qlora.yaml)

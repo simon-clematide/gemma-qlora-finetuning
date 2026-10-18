@@ -1,0 +1,1547 @@
+{
+  "num_documents": 150,
+  "baseline": {
+    "num_documents": 150,
+    "schema_validity_rate": 0.5666666666666667,
+    "valid_exact_rate": 0.0,
+    "empty_prediction_rate": 0.6666666666666666,
+    "parse_status_counts": {
+      "VALID_FENCED": 85,
+      "INVALID_SCHEMA": 50,
+      "INVALID_JSON": 6,
+      "UNKNOWN_LABEL": 9
+    },
+    "task_c1_category_strict": {
+      "num_documents": 150,
+      "num_evaluated_documents": 150,
+      "exact_set_accuracy": 0.15333333333333332,
+      "micro_precision": 0.1452991452991453,
+      "micro_recall": 0.12142857142857143,
+      "micro_f1": 0.13229571984435798,
+      "macro_f1_active": 0.1996491833448355,
+      "macro_f1_all_inventory": 0.1260942210598961,
+      "tp": 17,
+      "fp": 100,
+      "fn": 123,
+      "per_label": {
+        "Allgemein": {
+          "tp": 4,
+          "fp": 3,
+          "fn": 81,
+          "precision": 0.5714285714285714,
+          "recall": 0.047058823529411764,
+          "f1": 0.08695652173913043,
+          "support": 85
+        },
+        "Atmosphäre": {
+          "tp": 2,
+          "fp": 1,
+          "fn": 4,
+          "precision": 0.6666666666666666,
+          "recall": 0.3333333333333333,
+          "f1": 0.4444444444444444,
+          "support": 6
+        },
+        "Auslastung_und_Platzangebot": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 3,
+          "precision": 1.0,
+          "recall": 0.25,
+          "f1": 0.4,
+          "support": 4
+        },
+        "Barrierefreiheit": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Connectivity": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 3,
+          "precision": 1.0,
+          "recall": 0.25,
+          "f1": 0.4,
+          "support": 4
+        },
+        "DB_App_und_Website": {
+          "tp": 0,
+          "fp": 2,
+          "fn": 2,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 2
+        },
+        "Design": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Gastronomisches_Angebot": {
+          "tp": 0,
+          "fp": 3,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Gepäck": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Image": {
+          "tp": 0,
+          "fp": 18,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Informationen": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 5,
+          "precision": 1.0,
+          "recall": 0.16666666666666666,
+          "f1": 0.2857142857142857,
+          "support": 6
+        },
+        "Komfort_und_Ausstattung": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Reisen_mit_Kindern": {
+          "tp": 0,
+          "fp": 14,
+          "fn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 1
+        },
+        "Service_und_Kundenbetreuung": {
+          "tp": 3,
+          "fp": 28,
+          "fn": 1,
+          "precision": 0.0967741935483871,
+          "recall": 0.75,
+          "f1": 0.1714285714285714,
+          "support": 4
+        },
+        "Sicherheit": {
+          "tp": 0,
+          "fp": 4,
+          "fn": 3,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 3
+        },
+        "Sonstige_Unregelmässigkeiten": {
+          "tp": 2,
+          "fp": 2,
+          "fn": 6,
+          "precision": 0.5,
+          "recall": 0.25,
+          "f1": 0.3333333333333333,
+          "support": 8
+        },
+        "Ticketkauf": {
+          "tp": 1,
+          "fp": 16,
+          "fn": 2,
+          "precision": 0.058823529411764705,
+          "recall": 0.3333333333333333,
+          "f1": 0.1,
+          "support": 3
+        },
+        "Toiletten": {
+          "tp": 0,
+          "fp": 2,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Zugfahrt": {
+          "tp": 2,
+          "fp": 7,
+          "fn": 12,
+          "precision": 0.2222222222222222,
+          "recall": 0.14285714285714285,
+          "f1": 0.17391304347826086,
+          "support": 14
+        }
+      }
+    },
+    "task_c2_category_sentiment_strict": {
+      "num_documents": 150,
+      "num_evaluated_documents": 150,
+      "exact_set_accuracy": 0.14,
+      "micro_precision": 0.11016949152542373,
+      "micro_recall": 0.09285714285714286,
+      "micro_f1": 0.10077519379844961,
+      "macro_f1_active": 0.15570175995395938,
+      "macro_f1_all_inventory": 0.060095416122580805,
+      "tp": 13,
+      "fp": 105,
+      "fn": 127,
+      "per_label": {
+        "Allgemein:negative": {
+          "tp": 0,
+          "fp": 6,
+          "fn": 12,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 12
+        },
+        "Allgemein:neutral": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 71,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 71
+        },
+        "Allgemein:positive": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 2,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 2
+        },
+        "Atmosphäre:negative": {
+          "tp": 2,
+          "fp": 1,
+          "fn": 4,
+          "precision": 0.6666666666666666,
+          "recall": 0.3333333333333333,
+          "f1": 0.4444444444444444,
+          "support": 6
+        },
+        "Atmosphäre:neutral": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Atmosphäre:positive": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Auslastung_und_Platzangebot:negative": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 3,
+          "precision": 1.0,
+          "recall": 0.25,
+          "f1": 0.4,
+          "support": 4
+        },
+        "Auslastung_und_Platzangebot:neutral": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Auslastung_und_Platzangebot:positive": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Barrierefreiheit:negative": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Barrierefreiheit:neutral": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Barrierefreiheit:positive": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Connectivity:negative": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Connectivity:neutral": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 1
+        },
+        "Connectivity:positive": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 2,
+          "precision": 1.0,
+          "recall": 0.3333333333333333,
+          "f1": 0.5,
+          "support": 3
+        },
+        "DB_App_und_Website:negative": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "DB_App_und_Website:neutral": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 2,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 2
+        },
+        "DB_App_und_Website:positive": {
+          "tp": 0,
+          "fp": 2,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Design:negative": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Design:neutral": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Design:positive": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Gastronomisches_Angebot:negative": {
+          "tp": 0,
+          "fp": 2,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Gastronomisches_Angebot:neutral": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Gastronomisches_Angebot:positive": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Gepäck:negative": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Gepäck:neutral": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Gepäck:positive": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Image:negative": {
+          "tp": 0,
+          "fp": 18,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Image:neutral": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Image:positive": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Informationen:negative": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 4,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 4
+        },
+        "Informationen:neutral": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 1
+        },
+        "Informationen:positive": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 1
+        },
+        "Komfort_und_Ausstattung:negative": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Komfort_und_Ausstattung:neutral": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Komfort_und_Ausstattung:positive": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Reisen_mit_Kindern:negative": {
+          "tp": 0,
+          "fp": 11,
+          "fn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 1
+        },
+        "Reisen_mit_Kindern:neutral": {
+          "tp": 0,
+          "fp": 3,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Reisen_mit_Kindern:positive": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Service_und_Kundenbetreuung:negative": {
+          "tp": 3,
+          "fp": 25,
+          "fn": 0,
+          "precision": 0.10714285714285714,
+          "recall": 1.0,
+          "f1": 0.19354838709677416,
+          "support": 3
+        },
+        "Service_und_Kundenbetreuung:neutral": {
+          "tp": 0,
+          "fp": 2,
+          "fn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 1
+        },
+        "Service_und_Kundenbetreuung:positive": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Sicherheit:negative": {
+          "tp": 0,
+          "fp": 4,
+          "fn": 3,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 3
+        },
+        "Sicherheit:neutral": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Sicherheit:positive": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Sonstige_Unregelmässigkeiten:negative": {
+          "tp": 2,
+          "fp": 2,
+          "fn": 5,
+          "precision": 0.5,
+          "recall": 0.2857142857142857,
+          "f1": 0.36363636363636365,
+          "support": 7
+        },
+        "Sonstige_Unregelmässigkeiten:neutral": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 1
+        },
+        "Sonstige_Unregelmässigkeiten:positive": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Ticketkauf:negative": {
+          "tp": 0,
+          "fp": 12,
+          "fn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 1
+        },
+        "Ticketkauf:neutral": {
+          "tp": 1,
+          "fp": 3,
+          "fn": 1,
+          "precision": 0.25,
+          "recall": 0.5,
+          "f1": 0.3333333333333333,
+          "support": 2
+        },
+        "Ticketkauf:positive": {
+          "tp": 0,
+          "fp": 2,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Toiletten:negative": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Toiletten:neutral": {
+          "tp": 0,
+          "fp": 2,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Toiletten:positive": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Zugfahrt:negative": {
+          "tp": 2,
+          "fp": 7,
+          "fn": 10,
+          "precision": 0.2222222222222222,
+          "recall": 0.16666666666666666,
+          "f1": 0.1904761904761905,
+          "support": 12
+        },
+        "Zugfahrt:neutral": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 1
+        },
+        "Zugfahrt:positive": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 1
+        }
+      }
+    },
+    "task_c1_category_java_compat": {
+      "num_entries": 240,
+      "tp_sum": 17,
+      "fp_sum": 223,
+      "fn_sum": 223,
+      "micro_f1": 0.07083333333333333
+    },
+    "task_c2_category_sentiment_java_compat": {
+      "num_entries": 245,
+      "tp_sum": 13,
+      "fp_sum": 232,
+      "fn_sum": 232,
+      "micro_f1": 0.053061224489795916
+    },
+    "task_c2_strict_bootstrap_ci95": {
+      "mean": 0.09952881432354987,
+      "std": 0.0260007080277422,
+      "ci95_low": 0.05127737226277372,
+      "ci95_high": 0.1532987085906794
+    },
+    "efficiency": {
+      "total_prompt_tokens": 139021,
+      "total_completion_tokens": 5721,
+      "mean_prompt_tokens_per_doc": 926.8066666666666,
+      "mean_completion_tokens_per_doc": 38.14,
+      "prompt_tokens_per_1k_docs": 926806.6666666666,
+      "total_latency_ms": 390352.75600000017,
+      "mean_latency_ms_per_doc": 2602.3517066666677
+    }
+  },
+  "finetuned": {
+    "num_documents": 150,
+    "schema_validity_rate": 0.98,
+    "valid_exact_rate": 0.98,
+    "empty_prediction_rate": 0.17333333333333334,
+    "parse_status_counts": {
+      "VALID_EXACT": 147,
+      "UNKNOWN_LABEL": 3
+    },
+    "task_c1_category_strict": {
+      "num_documents": 150,
+      "num_evaluated_documents": 150,
+      "exact_set_accuracy": 0.6333333333333333,
+      "micro_precision": 0.6842105263157895,
+      "micro_recall": 0.65,
+      "micro_f1": 0.6666666666666667,
+      "macro_f1_active": 0.4511377511377512,
+      "macro_f1_all_inventory": 0.28492910598173754,
+      "tp": 91,
+      "fp": 42,
+      "fn": 49,
+      "per_label": {
+        "Allgemein": {
+          "tp": 67,
+          "fp": 24,
+          "fn": 18,
+          "precision": 0.7362637362637363,
+          "recall": 0.788235294117647,
+          "f1": 0.7613636363636365,
+          "support": 85
+        },
+        "Atmosphäre": {
+          "tp": 1,
+          "fp": 1,
+          "fn": 5,
+          "precision": 0.5,
+          "recall": 0.16666666666666666,
+          "f1": 0.25,
+          "support": 6
+        },
+        "Auslastung_und_Platzangebot": {
+          "tp": 3,
+          "fp": 2,
+          "fn": 1,
+          "precision": 0.6,
+          "recall": 0.75,
+          "f1": 0.6666666666666665,
+          "support": 4
+        },
+        "Barrierefreiheit": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Connectivity": {
+          "tp": 3,
+          "fp": 0,
+          "fn": 1,
+          "precision": 1.0,
+          "recall": 0.75,
+          "f1": 0.8571428571428571,
+          "support": 4
+        },
+        "DB_App_und_Website": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 1,
+          "precision": 1.0,
+          "recall": 0.5,
+          "f1": 0.6666666666666666,
+          "support": 2
+        },
+        "Design": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Gastronomisches_Angebot": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Gepäck": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Image": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Informationen": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 5,
+          "precision": 1.0,
+          "recall": 0.16666666666666666,
+          "f1": 0.2857142857142857,
+          "support": 6
+        },
+        "Komfort_und_Ausstattung": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Reisen_mit_Kindern": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 1
+        },
+        "Service_und_Kundenbetreuung": {
+          "tp": 1,
+          "fp": 2,
+          "fn": 3,
+          "precision": 0.3333333333333333,
+          "recall": 0.25,
+          "f1": 0.28571428571428575,
+          "support": 4
+        },
+        "Sicherheit": {
+          "tp": 1,
+          "fp": 1,
+          "fn": 2,
+          "precision": 0.5,
+          "recall": 0.3333333333333333,
+          "f1": 0.4,
+          "support": 3
+        },
+        "Sonstige_Unregelmässigkeiten": {
+          "tp": 5,
+          "fp": 3,
+          "fn": 3,
+          "precision": 0.625,
+          "recall": 0.625,
+          "f1": 0.625,
+          "support": 8
+        },
+        "Ticketkauf": {
+          "tp": 0,
+          "fp": 2,
+          "fn": 3,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 3
+        },
+        "Toiletten": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Zugfahrt": {
+          "tp": 8,
+          "fp": 4,
+          "fn": 6,
+          "precision": 0.6666666666666666,
+          "recall": 0.5714285714285714,
+          "f1": 0.6153846153846153,
+          "support": 14
+        }
+      }
+    },
+    "task_c2_category_sentiment_strict": {
+      "num_documents": 150,
+      "num_evaluated_documents": 150,
+      "exact_set_accuracy": 0.5866666666666667,
+      "micro_precision": 0.6119402985074627,
+      "micro_recall": 0.5857142857142857,
+      "micro_f1": 0.5985401459854015,
+      "macro_f1_active": 0.29729067741906956,
+      "macro_f1_all_inventory": 0.11474377023192159,
+      "tp": 82,
+      "fp": 52,
+      "fn": 58,
+      "per_label": {
+        "Allgemein:negative": {
+          "tp": 6,
+          "fp": 6,
+          "fn": 6,
+          "precision": 0.5,
+          "recall": 0.5,
+          "f1": 0.5,
+          "support": 12
+        },
+        "Allgemein:neutral": {
+          "tp": 53,
+          "fp": 25,
+          "fn": 18,
+          "precision": 0.6794871794871795,
+          "recall": 0.7464788732394366,
+          "f1": 0.7114093959731543,
+          "support": 71
+        },
+        "Allgemein:positive": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 2,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 2
+        },
+        "Atmosphäre:negative": {
+          "tp": 1,
+          "fp": 1,
+          "fn": 5,
+          "precision": 0.5,
+          "recall": 0.16666666666666666,
+          "f1": 0.25,
+          "support": 6
+        },
+        "Atmosphäre:neutral": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Atmosphäre:positive": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Auslastung_und_Platzangebot:negative": {
+          "tp": 3,
+          "fp": 1,
+          "fn": 1,
+          "precision": 0.75,
+          "recall": 0.75,
+          "f1": 0.75,
+          "support": 4
+        },
+        "Auslastung_und_Platzangebot:neutral": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Auslastung_und_Platzangebot:positive": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Barrierefreiheit:negative": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Barrierefreiheit:neutral": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Barrierefreiheit:positive": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Connectivity:negative": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Connectivity:neutral": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 1
+        },
+        "Connectivity:positive": {
+          "tp": 2,
+          "fp": 1,
+          "fn": 1,
+          "precision": 0.6666666666666666,
+          "recall": 0.6666666666666666,
+          "f1": 0.6666666666666666,
+          "support": 3
+        },
+        "DB_App_und_Website:negative": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "DB_App_und_Website:neutral": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 2,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 2
+        },
+        "DB_App_und_Website:positive": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Design:negative": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Design:neutral": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Design:positive": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Gastronomisches_Angebot:negative": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Gastronomisches_Angebot:neutral": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Gastronomisches_Angebot:positive": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Gepäck:negative": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Gepäck:neutral": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Gepäck:positive": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Image:negative": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Image:neutral": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Image:positive": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Informationen:negative": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 3,
+          "precision": 1.0,
+          "recall": 0.25,
+          "f1": 0.4,
+          "support": 4
+        },
+        "Informationen:neutral": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 1
+        },
+        "Informationen:positive": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 1
+        },
+        "Komfort_und_Ausstattung:negative": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Komfort_und_Ausstattung:neutral": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Komfort_und_Ausstattung:positive": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Reisen_mit_Kindern:negative": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 1
+        },
+        "Reisen_mit_Kindern:neutral": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Reisen_mit_Kindern:positive": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Service_und_Kundenbetreuung:negative": {
+          "tp": 1,
+          "fp": 1,
+          "fn": 2,
+          "precision": 0.5,
+          "recall": 0.3333333333333333,
+          "f1": 0.4,
+          "support": 3
+        },
+        "Service_und_Kundenbetreuung:neutral": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 1
+        },
+        "Service_und_Kundenbetreuung:positive": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Sicherheit:negative": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 2,
+          "precision": 1.0,
+          "recall": 0.3333333333333333,
+          "f1": 0.5,
+          "support": 3
+        },
+        "Sicherheit:neutral": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Sicherheit:positive": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Sonstige_Unregelmässigkeiten:negative": {
+          "tp": 5,
+          "fp": 3,
+          "fn": 2,
+          "precision": 0.625,
+          "recall": 0.7142857142857143,
+          "f1": 0.6666666666666666,
+          "support": 7
+        },
+        "Sonstige_Unregelmässigkeiten:neutral": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 1
+        },
+        "Sonstige_Unregelmässigkeiten:positive": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Ticketkauf:negative": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 1
+        },
+        "Ticketkauf:neutral": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 2,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 2
+        },
+        "Ticketkauf:positive": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Toiletten:negative": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Toiletten:neutral": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Toiletten:positive": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "Zugfahrt:negative": {
+          "tp": 8,
+          "fp": 3,
+          "fn": 4,
+          "precision": 0.7272727272727273,
+          "recall": 0.6666666666666666,
+          "f1": 0.6956521739130435,
+          "support": 12
+        },
+        "Zugfahrt:neutral": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 1
+        },
+        "Zugfahrt:positive": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 1
+        }
+      }
+    },
+    "task_c1_category_java_compat": {
+      "num_entries": 182,
+      "tp_sum": 91,
+      "fp_sum": 91,
+      "fn_sum": 91,
+      "micro_f1": 0.5
+    },
+    "task_c2_category_sentiment_java_compat": {
+      "num_entries": 192,
+      "tp_sum": 82,
+      "fp_sum": 110,
+      "fn_sum": 110,
+      "micro_f1": 0.4270833333333333
+    },
+    "task_c2_strict_bootstrap_ci95": {
+      "mean": 0.5996109228151669,
+      "std": 0.039587563882426555,
+      "ci95_low": 0.5190252881338293,
+      "ci95_high": 0.6761129715355066
+    },
+    "efficiency": {
+      "total_prompt_tokens": 139021,
+      "total_completion_tokens": 1556,
+      "mean_prompt_tokens_per_doc": 926.8066666666666,
+      "mean_completion_tokens_per_doc": 10.373333333333333,
+      "prompt_tokens_per_1k_docs": 926806.6666666666,
+      "total_latency_ms": 195919.40799999988,
+      "mean_latency_ms_per_doc": 1306.1293866666658
+    }
+  },
+  "deltas": {
+    "valid_exact_rate": 0.98,
+    "schema_validity_rate": 0.41333333333333333,
+    "c1_strict_micro_f1": 0.5343709468223088,
+    "c2_strict_micro_f1": 0.4977649521869519,
+    "c2_java_compat_micro_f1": 0.37402210884353737,
+    "exact_set_accuracy": 0.44666666666666666
+  },
+  "paired_bootstrap_c1": {
+    "point_baseline_f1": 0.13229571984435798,
+    "point_ft_f1": 0.6666666666666667,
+    "point_delta_f1": 0.5343709468223088,
+    "delta_mean": 0.5365312950933847,
+    "delta_std": 0.04785097958047749,
+    "delta_ci95_low": 0.441933320161023,
+    "delta_ci95_high": 0.6289299015027767,
+    "baseline_ci95_low": 0.07627118644067797,
+    "baseline_ci95_high": 0.1875,
+    "ft_ci95_low": 0.5910488073952904,
+    "ft_ci95_high": 0.7407615480649188,
+    "prob_improvement": 1.0
+  },
+  "paired_bootstrap_c2": {
+    "point_baseline_f1": 0.10077519379844961,
+    "point_ft_f1": 0.5985401459854015,
+    "point_delta_f1": 0.4977649521869519,
+    "delta_mean": 0.500082108491617,
+    "delta_std": 0.04627298188942391,
+    "delta_ci95_low": 0.40912295292675316,
+    "delta_ci95_high": 0.5863463661212551,
+    "baseline_ci95_low": 0.05127737226277372,
+    "baseline_ci95_high": 0.1532987085906794,
+    "ft_ci95_low": 0.5190252881338293,
+    "ft_ci95_high": 0.6761129715355066,
+    "prob_improvement": 1.0
+  }
+}

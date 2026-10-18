@@ -274,6 +274,12 @@ def align_predictions(
             )
 
     aligned = [by_id[doc_id] for doc_id in expected_ids]
+    for doc, pred in zip(docs, aligned):
+        if pred.split != doc.source_split:
+            raise ValueError(
+                f"Prediction split mismatch for {doc.doc_id!r}: "
+                f"expected {doc.source_split!r}, found {pred.split!r}"
+            )
     if expected_split is not None:
         mismatched_splits = {p.split for p in aligned if p.split != expected_split}
         if mismatched_splits:
@@ -408,6 +414,7 @@ def evaluate_task_c_predictions(
     """Full Task C evaluation reporting both C1 (Category) and C2 (Category+Sentiment)
     under both Strict Python scoring and Legacy Java-compatible scoring (`EvaluationScript.jar`).
     """
+    predictions = align_predictions(canonical_docs, predictions)
     pred_by_id = {p.doc_id: p for p in predictions}
 
     gold_c1_raw: list[set[str]] = []
@@ -592,6 +599,7 @@ def evaluate_task_d_predictions(
     2. Explicit-target Span F1: exact (start, end, category) and overlap (start, end, category),
        where unaligned predictions count as false positives.
     """
+    predictions = align_predictions(canonical_docs, predictions)
     pred_by_id = {p.doc_id: p for p in predictions}
 
     str_cat_pol_tp = str_cat_pol_fp = str_cat_pol_fn = 0

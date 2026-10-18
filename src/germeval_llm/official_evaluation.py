@@ -9,6 +9,7 @@ import subprocess
 from typing import Any, Sequence
 import lxml.etree as ET
 
+from germeval_llm.evaluation import align_predictions
 from germeval_llm.schemas import CanonicalDocument, PredictionRecord
 
 JAVA8_MACOS_PATH = "/Library/Internet Plug-Ins/JavaAppletPlugin.plugin/Contents/Home/bin/java"
@@ -42,6 +43,7 @@ def export_task_c_to_official_tsv(
     """Export Task C predictions to the 5-column TSV format expected by `GermevalReader.readTSV`:
     `DOC_ID \\t TEXT \\t RELEVANCE \\t SENTIMENT \\t CAT1:POL1 CAT2:POL2`
     """
+    predictions = align_predictions(canonical_docs, predictions)
     pred_by_id = {p.doc_id: p for p in predictions}
     out = Path(out_tsv_path)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -92,6 +94,7 @@ def export_task_d_to_official_xml(
     Only successfully aligned predictions (`start_char is not None and end_char is not None`) are written
     as `<Opinion>` elements.
     """
+    predictions = align_predictions(canonical_docs, predictions)
     pred_by_id = {p.doc_id: p for p in predictions}
     root = ET.Element("Documents")
 

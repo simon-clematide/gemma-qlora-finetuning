@@ -1,0 +1,17 @@
+{
+  "checks": [
+    {
+      "doc_id": "http://twitter.com/pouvraire/statuses/697803662270267392",
+      "raw_output_equal": true
+    },
+    {
+      "doc_id": "http://www.facebook.com/113994684003/posts/10153648055179004#113994684003\\_10153648055179004",
+      "raw_output_equal": true
+    },
+    {
+      "doc_id": "http://www.hogaumacht.de/newsletter/tourismus/bahn-wieder-ein-wut-brief-7964.html",
+      "raw_output_equal": true
+    }
+  ],
+  "all_equal": true
+}

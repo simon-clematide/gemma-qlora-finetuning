@@ -6,10 +6,15 @@ import argparse
 import json
 from pathlib import Path
 
-from germeval_llm.convert import ensure_derived_datasets_ready, select_few_shot_examples_task_c
+from germeval_llm.convert import (
+    ensure_derived_datasets_ready,
+    select_few_shot_examples_task_c,
+    select_few_shot_examples_task_d,
+)
 from germeval_llm.evaluation import evaluate_task_c_predictions, evaluate_task_d_predictions
 from germeval_llm.inference import (
     build_hf_generator_fn,
+    detect_compute_device,
     load_gemma_model_and_tokenizer,
     load_predictions_jsonl,
     run_task_c_inference_with_generator,
@@ -21,30 +26,31 @@ from germeval_llm.official_evaluation import (
     run_official_java_evaluator,
 )
 from germeval_llm.reporting import save_json
-from germeval_llm.schemas import TaskCExample
+from germeval_llm.schemas import TaskCExample, TaskDExample
 from germeval_llm.training import run_sft_adapter_training
 from germeval_llm.xml_parser import load_canonical_jsonl
 
 
 def _cmd_prompt(args: argparse.Namespace) -> None:
+    args.prompt_key = args.prompt_key or ("p1_guidelines" if args.task == "C" else "d1_guidelines")
     docs = load_canonical_jsonl(f"data/canonical/{args.split}.jsonl")
     if args.max_docs:
         docs = docs[: args.max_docs]
 
-    few_shots: list[TaskCExample] | None = None
+    few_shots = None
     if args.n_shots > 0:
-        if not Path("data/derived/task_c/train.jsonl").exists():
+        train_path = Path(f"data/derived/task_{args.task.lower()}/train.jsonl")
+        if not train_path.exists():
             ensure_derived_datasets_ready()
-        train_exs: list[TaskCExample] = []
-        with Path("data/derived/task_c/train.jsonl").open("r", encoding="utf-8") as f:
-            for line in f:
-                if line.strip():
-                    train_exs.append(TaskCExample.model_validate_json(line))
-        few_shots = select_few_shot_examples_task_c(
-            train_exs,
-            n_shots=args.n_shots,
-            strategy=args.shot_strategy,
-            seed=args.seed,
+        example_type = TaskCExample if args.task == "C" else TaskDExample
+        train_examples = [
+            example_type.model_validate_json(line)
+            for line in train_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        selector = select_few_shot_examples_task_c if args.task == "C" else select_few_shot_examples_task_d
+        few_shots = selector(
+            train_examples, n_shots=args.n_shots, strategy=args.shot_strategy, seed=args.seed,
         )
 
     model, tokenizer = load_gemma_model_and_tokenizer(
@@ -72,11 +78,38 @@ def _cmd_prompt(args: argparse.Namespace) -> None:
             split=args.split,
             generate_fn=gen_fn,
             prompt_key=args.prompt_key,
+            few_shot_examples=few_shots,
         )
         out_pred = save_predictions_jsonl(preds, f"results/predictions/{args.run_id}_{args.split}.jsonl")
         metrics = evaluate_task_d_predictions(docs, preds)
 
     out_metrics = save_json(metrics, f"results/metrics/{args.run_id}_{args.split}.json")
+    save_json(
+        {
+            "execution_mode": "model_inference",
+            "experiment_id": args.run_id,
+            "base_model": args.model_id,
+            "task": args.task,
+            "prompt_id": args.prompt_key,
+            "training_split": "train" if args.adapter_path else None,
+            "evaluation_split": args.split,
+            "evaluation_num_docs": len(docs),
+            "evaluation_doc_ids": [doc.doc_id for doc in docs],
+            "seed": args.seed,
+            "n_shots": len(few_shots or []),
+            "shot_strategy": args.shot_strategy,
+            "demonstration_doc_ids": [ex.doc_id for ex in few_shots or []],
+            "adapter_path": args.adapter_path,
+            "requested_load_in_4bit": args.load_in_4bit,
+            "loaded_in_4bit": bool(getattr(model, "is_loaded_in_4bit", False)),
+            "max_new_tokens": args.max_new_tokens,
+            "do_sample": False,
+            "hardware": detect_compute_device(),
+            "predictions_path": str(out_pred),
+            "metrics_path": str(out_metrics),
+        },
+        f"results/runs/{args.run_id}_{args.split}.json",
+    )
     print(f"Saved predictions to {out_pred} and metrics to {out_metrics}")
 
 
@@ -123,7 +156,7 @@ def main() -> None:
     p_prompt.add_argument("--model-id", default="google/gemma-2-2b-it")
     p_prompt.add_argument("--adapter-path", default=None)
     p_prompt.add_argument("--load-in-4bit", action="store_true")
-    p_prompt.add_argument("--prompt-key", default="p1_guidelines")
+    p_prompt.add_argument("--prompt-key", default=None, help="Defaults to p1_guidelines for C, d1_guidelines for D")
     p_prompt.add_argument("--n-shots", type=int, default=0)
     p_prompt.add_argument("--shot-strategy", choices=["uniform", "stratified_diverse"], default="stratified_diverse")
     p_prompt.add_argument("--max-docs", type=int, default=None)

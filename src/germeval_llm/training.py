@@ -235,17 +235,18 @@ def run_sft_adapter_training(
             c_str = f"{c_msgs[0].content}<end_of_turn>\n"
             prompts.append(p_str)
             completions.append(c_str)
-        return Dataset.from_dict({"prompt": prompts, "completion": completions})
+        return Dataset.from_dict({"prompt": prompts, "completion": completions, "doc_id": [r["doc_id"] for r in rows]})
 
     hf_train = _to_prompt_completion_dataset(raw_train_rows)
     dev_cap = 64 if (subset_size is not None and subset_size <= 1000) else 160
     hf_dev = _to_prompt_completion_dataset(raw_dev_rows[:dev_cap])
 
     model_id = cfg["base_model_id"]
+    model_revision = cfg.get("model_revision", "main")
     hw = detect_compute_device()
     compute_dtype = torch.bfloat16 if hw["bf16_supported"] else torch.float16
 
-    tokenizer = AutoTokenizer.from_pretrained(model_id)
+    tokenizer = AutoTokenizer.from_pretrained(model_id, revision=model_revision)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
@@ -257,6 +258,7 @@ def run_sft_adapter_training(
     use_grad_ckpt = not (load_in_4bit and is_t4_class_gpu)
 
     model_kwargs: dict[str, Any] = {
+        "revision": model_revision,
         "device_map": "auto" if hw["cuda_available"] else None,
         "attn_implementation": "sdpa" if hw["cuda_available"] else "eager",
         "dtype": compute_dtype if hw["device"] != "cpu" else torch.float32,
@@ -384,12 +386,37 @@ def run_sft_adapter_training(
     # whether the GPU supports bfloat16. Re-sanitize trainer.model to compute_dtype (float16 on T4) before trainer.train().
     _sanitize_model_dtypes(trainer.model)
 
+    # Preserve the actual post-tokenization rows, including any truncation/filtering,
+    # so the recorded training IDs and completion-only masks can be audited.
+    from germeval_llm.prompts import compute_completion_only_labels
+    marker_ids = tokenizer.encode("<start_of_turn>model\n", add_special_tokens=False)
+    for name, prepared in [("train", trainer.train_dataset), ("dev", trainer.eval_dataset)]:
+        raw_count = len(raw_train_rows) if name == "train" else len(raw_dev_rows[:dev_cap])
+        if len(prepared) != raw_count:
+            raise ValueError(
+                f"Truncation removed {raw_count - len(prepared)} {name} examples; increase max_seq_length"
+            )
+        with (out_dir / f"{name}_tokenization.jsonl").open("w", encoding="utf-8") as audit:
+            for row in prepared:
+                full_ids = tokenizer.encode(row["prompt"] + row["completion"])
+                if list(row["input_ids"]) != list(full_ids):
+                    raise ValueError(f"Truncated training completion for {row['doc_id']}; increase max_seq_length")
+                expected_labels = compute_completion_only_labels(row["input_ids"], marker_ids)
+                if list(row["labels"]) != expected_labels:
+                    raise ValueError(f"Completion-only loss mask mismatch for {row['doc_id']}")
+                if row["input_ids"].count(tokenizer.bos_token_id) != 1:
+                    raise ValueError(f"Expected one BOS in training example {row['doc_id']}")
+                audit.write(json.dumps({
+                    "doc_id": row["doc_id"], "input_ids": row["input_ids"], "labels": row["labels"],
+                }) + "\n")
+
     t0 = time.perf_counter()
     train_res = trainer.train()
     wall_sec = time.perf_counter() - t0
 
     model.save_pretrained(str(out_dir))
     tokenizer.save_pretrained(str(out_dir))
+    trainer.save_state()
 
     peak_vram_mb = (
         round(torch.cuda.max_memory_allocated() / (1024**2), 1) if hw["cuda_available"] else 0.0
@@ -402,6 +429,36 @@ def run_sft_adapter_training(
 
     return {
         "adapter_dir": str(out_dir),
+        "base_model_id": model_id,
+        "model_revision": model_revision,
+        "hardware": hw,
+        "loaded_in_4bit": load_in_4bit,
+        "parameter_dtypes": sorted({str(p.dtype) for p in model.parameters()}),
+        "trainable_parameter_dtypes": sorted({str(p.dtype) for p in model.parameters() if p.requires_grad}),
+        "training_doc_ids": [r["doc_id"] for r in raw_train_rows],
+        "tokenized_training_doc_ids": list(trainer.train_dataset["doc_id"]),
+        "tokenized_validation_doc_ids": list(trainer.eval_dataset["doc_id"]),
+        "validation_doc_ids": [r["doc_id"] for r in raw_dev_rows[:dev_cap]],
+        "tokenized_train_examples": len(trainer.train_dataset),
+        "tokenized_validation_examples": len(trainer.eval_dataset),
+        "actual_training_settings": {
+            "per_device_train_batch_size": train_bs,
+            "gradient_accumulation_steps": grad_accum,
+            "effective_batch_size": train_bs * grad_accum * trainer.args.world_size,
+            "per_device_eval_batch_size": trainer.args.per_device_eval_batch_size,
+            "max_length": trainer.args.max_length,
+            "learning_rate": trainer.args.learning_rate,
+            "lr_scheduler_type": str(trainer.args.lr_scheduler_type),
+            "warmup_steps": trainer.args.warmup_steps,
+            "weight_decay": trainer.args.weight_decay,
+            "optim": str(trainer.args.optim),
+            "gradient_checkpointing": use_grad_ckpt,
+            "completion_only_loss": trainer.args.completion_only_loss,
+            "eval_strategy": str(trainer.args.eval_strategy),
+            "eval_steps": trainer.args.eval_steps,
+            "attn_implementation": model_kwargs["attn_implementation"],
+            "global_step": trainer.state.global_step,
+        },
         "device": hw["device"],
         "train_examples": len(raw_train_rows),
         "max_steps": max_steps,
@@ -519,7 +576,8 @@ def run_preflight_diagnostics(
     # 2. Data splits, manifests & prediction alignment
     ensure_derived_datasets_ready()
     test_syn_docs = xml_parser.load_canonical_jsonl("data/canonical/test_syn.jsonl")
-    manifest = json.loads(Path("results/runs/classroom_fast_n1000_manifest.json").read_text(encoding="utf-8"))
+    from germeval_llm.replay import load_replay_manifest
+    manifest = load_replay_manifest()
     eval_slice = test_syn_docs[: int(manifest["evaluation_num_docs"])]
     b_preds = evaluation.align_predictions(
         eval_slice,

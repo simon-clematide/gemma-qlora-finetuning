@@ -288,9 +288,14 @@ def _simulate_realistic_task_d_run(
 def run_m3_to_m6_benchmark_artifacts(
     split_docs: dict[str, list[CanonicalDocument]],
 ) -> dict[str, Any]:
-    """Generate complete prediction, metric, learning-curve, and official Java reconciliation artifacts
-    across dev, test_syn, and test_dia so all 11 notebooks have verified data ready to inspect.
+    """Generate simulated teaching artifacts exclusively under results/simulations/.
+
+    Scores and hardware profiles are synthetic, not measured model executions.
     """
+    save_json(
+        {"execution_mode": "simulation", "split_seed_offsets": {"dev": 0, "test_syn": 1, "test_dia": 2}},
+        "results/simulations/provenance.json",
+    )
     task_c_specs = {
         "P0_minimal_0shot": {
             "method": "prompt_zero_shot_minimal",
@@ -409,14 +414,16 @@ def run_m3_to_m6_benchmark_artifacts(
                 fenced_rate=spec["fenced"],
                 invalid_json_rate=spec["inv_json"],
                 prompt_tokens_base=spec["p_toks"],
-                seed=spec["seed"] + hash(sp) % 97,
+                seed=spec["seed"] + {"dev": 0, "test_syn": 1, "test_dia": 2}[sp],
             )
-            save_predictions_jsonl(preds, f"results/predictions/{run_id}_{sp}.jsonl")
+            save_predictions_jsonl(preds, f"results/simulations/predictions/{run_id}_{sp}.jsonl")
             m = evaluate_task_c_predictions(split_docs[sp], preds, n_bootstrap=200)
+            m["execution_mode"] = "simulation"
             run_metrics_by_split[sp] = m
 
             benchmark_rows.append(
                 {
+                    "execution_mode": "simulation",
                     "run_id": run_id,
                     "method": spec["method"],
                     "split": sp,
@@ -431,7 +438,7 @@ def run_m3_to_m6_benchmark_artifacts(
                 }
             )
 
-        save_json(run_metrics_by_split, f"results/metrics/{run_id}.json")
+        save_json(run_metrics_by_split, f"results/simulations/metrics/{run_id}.json")
 
         # Save run manifest
         is_lora = "lora" in spec["method"]
@@ -443,6 +450,7 @@ def run_m3_to_m6_benchmark_artifacts(
         )
         save_json(
             {
+                "execution_mode": "simulation",
                 "run_id": run_id,
                 "task": "C",
                 "method": spec["method"],
@@ -461,7 +469,7 @@ def run_m3_to_m6_benchmark_artifacts(
                     "task_c2_category_sentiment_strict"
                 ]["micro_f1"],
             },
-            f"results/runs/{run_id}.json",
+            f"results/simulations/runs/{run_id}.json",
         )
 
     # Official EvaluationScript.jar reconciliation on test_syn for Q1_qlora_r16 and P3_dev_optimized_10shot
@@ -469,18 +477,19 @@ def run_m3_to_m6_benchmark_artifacts(
     for run_id in ("P3_dev_optimized_10shot", "Q1_qlora_r16"):
         from germeval_llm.inference import load_predictions_jsonl
 
-        preds_syn = load_predictions_jsonl(f"results/predictions/{run_id}_test_syn.jsonl")
+        preds_syn = load_predictions_jsonl(f"results/simulations/predictions/{run_id}_test_syn.jsonl")
         tsv_pred_path = export_task_c_to_official_tsv(
-            split_docs["test_syn"], preds_syn, f"results/predictions/{run_id}_test_syn_official.tsv"
+            split_docs["test_syn"], preds_syn, f"results/simulations/predictions/{run_id}_test_syn_official.tsv"
         )
         java_res = run_official_java_evaluator(
             "category",
             predicted_file=tsv_pred_path,
             gold_file="data/raw/test_TIMESTAMP1.tsv",
         )
-        py_res = json.loads(Path(f"results/metrics/{run_id}.json").read_text(encoding="utf-8"))["test_syn"]
+        py_res = json.loads(Path(f"results/simulations/metrics/{run_id}.json").read_text(encoding="utf-8"))["test_syn"]
         reconciliation_records.append(
             {
+                "execution_mode": "simulation",
                 "run_id": run_id,
                 "split": "test_syn",
                 "python_strict_c1_micro_f1": round(py_res["task_c1_category_strict"]["micro_f1"], 6),
@@ -502,7 +511,7 @@ def run_m3_to_m6_benchmark_artifacts(
                 < 1e-6,
             }
         )
-    save_json({"reconciliations": reconciliation_records}, "results/metrics/official_java_reconciliation.json")
+    save_json({"reconciliations": reconciliation_records}, "results/simulations/metrics/official_java_reconciliation.json")
 
     # Q2 Learning curves (subset sizes 100..19432, uniform vs stratified, 3 seeds)
     lc_rows: list[dict[str, Any]] = []
@@ -520,6 +529,7 @@ def run_m3_to_m6_benchmark_artifacts(
                 c2_macro = 0.29 + 0.34 * (prog**0.75) + (strat_bonus * 1.6) + rng.gauss(0, 0.006)
                 lc_rows.append(
                     {
+                        "execution_mode": "simulation",
                         "train_examples": n_ex,
                         "sampling_strategy": strat,
                         "seed": seed,
@@ -531,19 +541,20 @@ def run_m3_to_m6_benchmark_artifacts(
                     }
                 )
     lc_df = pd.DataFrame(lc_rows)
-    lc_df.to_csv("results/metrics/learning_curves_q2.csv", index=False)
+    lc_df.to_csv("results/simulations/metrics/learning_curves_q2.csv", index=False)
 
-    dev_p0 = json.loads(Path("results/metrics/P0_minimal_0shot.json").read_text())["dev"][
+    dev_p0 = json.loads(Path("results/simulations/metrics/P0_minimal_0shot.json").read_text())["dev"][
         "task_c2_category_sentiment_strict"
     ]["micro_f1"]
-    dev_p1 = json.loads(Path("results/metrics/P1_guidelines_0shot.json").read_text())["dev"][
+    dev_p1 = json.loads(Path("results/simulations/metrics/P1_guidelines_0shot.json").read_text())["dev"][
         "task_c2_category_sentiment_strict"
     ]["micro_f1"]
-    dev_p3 = json.loads(Path("results/metrics/P3_dev_optimized_10shot.json").read_text())["dev"][
+    dev_p3 = json.loads(Path("results/simulations/metrics/P3_dev_optimized_10shot.json").read_text())["dev"][
         "task_c2_category_sentiment_strict"
     ]["micro_f1"]
     plot_learning_curve(
         lc_df,
+        out_path="results/simulations/figures/learning_curve_task_c2.png",
         prompt_baselines={
             "P0 (Minimal 0-shot)": dev_p0,
             "P1 (Guidelines 0-shot)": dev_p1,
@@ -568,17 +579,18 @@ def run_m3_to_m6_benchmark_artifacts(
                 star_recall=d_spec["star_rec"],
                 spurious_prob=d_spec["spurious"],
                 prompt_tokens_base=d_spec["p_toks"],
-                seed=d_spec["seed"] + hash(sp) % 53,
+                seed=d_spec["seed"] + {"dev": 0, "test_syn": 1, "test_dia": 2}[sp],
             )
-            save_predictions_jsonl(d_preds, f"results/predictions/{d_run_id}_{sp}.jsonl")
+            save_predictions_jsonl(d_preds, f"results/simulations/predictions/{d_run_id}_{sp}.jsonl")
             d_metrics = evaluate_task_d_predictions(split_docs[sp], d_preds)
+            d_metrics["execution_mode"] = "simulation"
 
             # Official XML OTE evaluation against explicit-only gold XML and raw all-opinions gold XML
             pred_xml = export_task_d_to_official_xml(
-                split_docs[sp], d_preds, f"results/predictions/{d_run_id}_{sp}_ote.xml"
+                split_docs[sp], d_preds, f"results/simulations/predictions/{d_run_id}_{sp}_ote.xml"
             )
             explicit_gold_xml = export_explicit_only_gold_xml(
-                split_docs[sp], f"results/predictions/gold_{sp}_explicit_only.xml"
+                split_docs[sp], f"results/simulations/predictions/gold_{sp}_explicit_only.xml"
             )
             java_ote_explicit = run_official_java_evaluator("OTE", pred_xml, explicit_gold_xml)
             d_metrics["official_jar_explicit_gold_ote"] = {
@@ -587,22 +599,25 @@ def run_m3_to_m6_benchmark_artifacts(
             }
             task_d_summary[d_run_id][sp] = d_metrics
 
-    save_json(task_d_summary, "results/metrics/task_d_summary.json")
+    save_json(task_d_summary, "results/simulations/metrics/task_d_summary.json")
 
     # Error analysis plots & paired quadrant analysis on test_syn
     from germeval_llm.inference import load_predictions_jsonl
 
-    p3_metrics_syn = json.loads(Path("results/metrics/P3_dev_optimized_10shot.json").read_text())["test_syn"]
-    q1_metrics_syn = json.loads(Path("results/metrics/Q1_qlora_r16.json").read_text())["test_syn"]
-    plot_per_category_delta_f1(p3_metrics_syn, q1_metrics_syn)
+    p3_metrics_syn = json.loads(Path("results/simulations/metrics/P3_dev_optimized_10shot.json").read_text())["test_syn"]
+    q1_metrics_syn = json.loads(Path("results/simulations/metrics/Q1_qlora_r16.json").read_text())["test_syn"]
+    plot_per_category_delta_f1(
+        p3_metrics_syn, q1_metrics_syn,
+        out_path="results/simulations/figures/error_analysis_delta_f1.png",
+    )
 
-    p3_preds_syn = load_predictions_jsonl("results/predictions/P3_dev_optimized_10shot_test_syn.jsonl")
-    q1_preds_syn = load_predictions_jsonl("results/predictions/Q1_qlora_r16_test_syn.jsonl")
+    p3_preds_syn = load_predictions_jsonl("results/simulations/predictions/P3_dev_optimized_10shot_test_syn.jsonl")
+    q1_preds_syn = load_predictions_jsonl("results/simulations/predictions/Q1_qlora_r16_test_syn.jsonl")
     quadrants = compute_paired_contingency_quadrants(split_docs["test_syn"], p3_preds_syn, q1_preds_syn)
-    save_json(quadrants, "results/metrics/error_analysis_quadrants_test_syn.json")
+    save_json(quadrants, "results/simulations/metrics/error_analysis_quadrants_test_syn.json")
 
     bench_df = pd.DataFrame(benchmark_rows)
-    bench_df.to_csv("results/metrics/benchmark.csv", index=False)
+    bench_df.to_csv("results/simulations/metrics/benchmark.csv", index=False)
     return {
         "benchmark_rows": len(benchmark_rows),
         "reconciliations": reconciliation_records,
@@ -610,6 +625,12 @@ def run_m3_to_m6_benchmark_artifacts(
 
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Prepare data; optionally generate isolated simulated benchmarks")
+    parser.add_argument("--simulate", action="store_true", help="Also write synthetic benchmarks under results/simulations/")
+    args = parser.parse_args()
     splits = run_m1_and_m2_data_pipeline()
-    run_m3_to_m6_benchmark_artifacts(splits)
+    if args.simulate:
+        run_m3_to_m6_benchmark_artifacts(splits)
     print("Pipeline completed successfully.")

@@ -14,9 +14,9 @@ echo "Host: $(hostname) | Date: $(date -u)"
 
 # 0. Ensure environment and canonical/derived datasets exist
 uv sync --extra dev --extra ml --extra cuda
-uv run python -m germeval_llm.pipeline
+uv run python -c 'from germeval_llm.convert import ensure_derived_datasets_ready; ensure_derived_datasets_ready()'
 
-# 1. Prompting Baselines on Dev & Test Splits (P0, P1, P2 2/5/10-shot, P3)
+# 1. Prompting baselines on dev and test splits (P0, P1, fixed 10-shot P3)
 for SPLIT in dev test_syn test_dia; do
     uv run python -m germeval_llm.cli infer --run-id P0_minimal_0shot --task C --split "$SPLIT" --prompt-key p0_minimal --n-shots 0 --load-in-4bit
     uv run python -m germeval_llm.cli infer --run-id P1_guidelines_0shot --task C --split "$SPLIT" --prompt-key p1_guidelines --n-shots 0 --load-in-4bit
