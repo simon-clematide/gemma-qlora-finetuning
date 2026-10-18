@@ -81,6 +81,7 @@ def load_gemma_model_and_tokenizer(
         "revision": revision,
         "device_map": "auto" if hw["cuda_available"] else None,
         "dtype": compute_dtype if hw["device"] != "cpu" else torch.float32,
+        "attn_implementation": "sdpa" if hw["cuda_available"] else "eager",
     }
 
     if load_in_4bit and hw["cuda_available"]:

@@ -213,9 +213,14 @@ def run_sft_adapter_training(
     tokenizer.padding_side = "right"
 
     load_in_4bit = bool(cfg.get("load_in_4bit", False)) and hw["cuda_available"]
+    is_t4_class_gpu = hw["cuda_available"] and (not hw["bf16_supported"])
+    # In 4-bit QLoRA with micro-batch size 2 on a 15 GB T4, disabling gradient checkpointing avoids
+    # recomputing all 26 layers + 182 NF4 dequantizations during backward while using only ~5.5 GB VRAM.
+    use_grad_ckpt = not (load_in_4bit and is_t4_class_gpu)
+
     model_kwargs: dict[str, Any] = {
         "device_map": "auto" if hw["cuda_available"] else None,
-        "attn_implementation": "eager",  # accurate Gemma-2 soft-capping attention
+        "attn_implementation": "sdpa" if hw["cuda_available"] else "eager",
         "dtype": compute_dtype if hw["device"] != "cpu" else torch.float32,
     }
 
@@ -245,12 +250,13 @@ def run_sft_adapter_training(
         )
 
     model = AutoModelForCausalLM.from_pretrained(model_id, **model_kwargs)
+    model.config.use_cache = False
     if not hw["cuda_available"] and hw["device"] == "mps":
         model = model.to("mps")
 
     if load_in_4bit:
-        model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
-    else:
+        model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=use_grad_ckpt)
+    elif use_grad_ckpt:
         model.gradient_checkpointing_enable()
         if hasattr(model, "enable_input_require_grads"):
             model.enable_input_require_grads()
@@ -261,17 +267,15 @@ def run_sft_adapter_training(
     def _sanitize_model_dtypes(target_model: Any) -> None:
         if hw["device"] == "cpu":
             return
-        # On Ampere+ (bf16_supported=True), all non-4bit params and trainable LoRA weights use bfloat16.
-        # On Turing T4 (bf16_supported=False), frozen non-4bit params (embed_tokens/lm_head, RMSNorm) use float16
-        # so TRL's fused chunked_logprob kernel runs in float16, while trainable LoRA weights use float32 to prevent
-        # gradient underflow without GradScaler and to override SFTTrainer.__init__'s hardcoded .to(torch.bfloat16).
-        trainable_dtype = torch.bfloat16 if hw["bf16_supported"] else torch.float32
+        # Unify all non-4bit parameters (including trainable LoRA weights A/B, embeddings, lm_head, RMSNorm)
+        # to compute_dtype (bfloat16 on Ampere+ L4/A100; float16 on Turing T4 with fp16=False).
+        # Keeping LoRA A/B in float16 on T4 eliminates 1,456 float16<->float32 activation casts per step
+        # and executes LoRA matmuls on T4's 65-TFLOPS FP16 Tensor Cores instead of 8-TFLOPS FP32 cores.
         for param in target_model.parameters():
             if param.__class__.__name__ == "Params4bit":
                 continue
-            desired = trainable_dtype if param.requires_grad else compute_dtype
-            if param.dtype != desired:
-                param.data = param.data.to(desired)
+            if param.dtype != compute_dtype:
+                param.data = param.data.to(compute_dtype)
         for buf in target_model.buffers():
             if buf.dtype.is_floating_point and buf.dtype != compute_dtype:
                 buf.data = buf.data.to(compute_dtype)
@@ -299,11 +303,15 @@ def run_sft_adapter_training(
     except Exception:
         pass
 
+    train_bs = 2 if is_t4_class_gpu else int(tcfg.get("per_device_train_batch_size", 4))
+    grad_accum = int(tcfg.get("gradient_accumulation_steps", 4))
+
     sft_config = SFTConfig(
         output_dir=str(out_dir / "checkpoints"),
-        per_device_train_batch_size=int(tcfg.get("per_device_train_batch_size", 4)),
-        per_device_eval_batch_size=int(tcfg.get("per_device_train_batch_size", 4)),
-        gradient_accumulation_steps=int(tcfg.get("gradient_accumulation_steps", 4)),
+        per_device_train_batch_size=train_bs,
+        per_device_eval_batch_size=4,
+        gradient_accumulation_steps=grad_accum,
+        gradient_checkpointing=use_grad_ckpt,
         learning_rate=float(tcfg.get("learning_rate", 2e-4)),
         lr_scheduler_type=str(tcfg.get("lr_scheduler_type", "cosine")),
         warmup_steps=max(1, int(round(max_steps * float(tcfg.get("warmup_ratio", 0.05))))),
@@ -314,8 +322,7 @@ def run_sft_adapter_training(
         optim=str(tcfg.get("optim", "paged_adamw_8bit")) if hw["cuda_available"] else "adamw_torch",
         weight_decay=float(tcfg.get("weight_decay", 0.01)),
         # Only enable bf16 on Ampere+ GPUs (CC >= 8.0, e.g. L4/A100).
-        # On Turing GPUs like T4 (CC 7.5), base/4-bit compute runs in float16 via compute_dtype=torch.float16
-        # and trainable LoRA weights run in float32 with fp16=False.
+        # On Turing GPUs like T4 (CC 7.5), all 4-bit dequantization and LoRA compute runs in float16 via compute_dtype.
         bf16=hw["bf16_supported"] and hw["cuda_available"],
         fp16=False,
         logging_steps=max(1, max_steps // 10),
@@ -334,9 +341,9 @@ def run_sft_adapter_training(
         eval_dataset=hf_dev,
         args=sft_config,
     )
-    # CRITICAL: trl's SFTTrainer.__init__ (line 287) unconditionally casts all trainable parameters of quantized
+    # CRITICAL: trl's SFTTrainer.__init__ (line 911) unconditionally casts all trainable parameters of quantized
     # models to torch.bfloat16 (`if _is_quantized_model: param.data = param.data.to(torch.bfloat16)`), ignoring
-    # whether the GPU supports bfloat16. Re-sanitize trainer.model after SFTTrainer.__init__ before trainer.train().
+    # whether the GPU supports bfloat16. Re-sanitize trainer.model to compute_dtype (float16 on T4) before trainer.train().
     _sanitize_model_dtypes(trainer.model)
 
     t0 = time.perf_counter()
@@ -511,12 +518,14 @@ def run_preflight_diagnostics(
     # 4. Hardware & precision policy
     hw = inference.detect_compute_device()
     compute_dtype = torch.bfloat16 if hw["bf16_supported"] else torch.float16
-    trainable_dtype = torch.bfloat16 if hw["bf16_supported"] else torch.float32
+    is_t4_class_gpu = hw["cuda_available"] and (not hw["bf16_supported"])
+    use_grad_ckpt = not (use_4bit_quantization and is_t4_class_gpu)
+    attn_impl = "sdpa" if hw["cuda_available"] else "eager"
     hw_desc = (
         f"CUDA {hw['gpu_name']} (CC={hw.get('compute_capability')}, bf16={hw['bf16_supported']}, "
-        f"compute={compute_dtype}, trainable={trainable_dtype})"
+        f"dtype={compute_dtype}, attn={attn_impl}, grad_ckpt={use_grad_ckpt})"
         if hw["cuda_available"]
-        else f"Device={hw['device'].upper()} (bf16={hw['bf16_supported']})"
+        else f"Device={hw['device'].upper()} (bf16={hw['bf16_supported']}, dtype={compute_dtype})"
     )
     _record("4. Hardware & Precision Policy", True, hw_desc)
 
@@ -559,7 +568,7 @@ def run_preflight_diagnostics(
         pad_token_id=0,
         eos_token_id=1,
         bos_token_id=2,
-        attn_implementation="eager",
+        attn_implementation=attn_impl,
     )
 
     tmpdir = Path(tempfile.mkdtemp(prefix="germeval_preflight_"))
@@ -573,7 +582,7 @@ def run_preflight_diagnostics(
         load_4bit = bool(use_4bit_quantization and hw["cuda_available"])
         load_kwargs: dict[str, Any] = {
             "device_map": "auto" if hw["cuda_available"] else None,
-            "attn_implementation": "eager",
+            "attn_implementation": attn_impl,
             "dtype": compute_dtype if hw["device"] != "cpu" else torch.float32,
         }
         if load_4bit:
@@ -587,6 +596,7 @@ def run_preflight_diagnostics(
             )
 
         micro_model = Gemma2ForCausalLM.from_pretrained(str(base_dir), **load_kwargs)
+        micro_model.config.use_cache = False
         if not hw["cuda_available"] and hw["device"] == "mps":
             micro_model = micro_model.to("mps")
 
@@ -599,8 +609,8 @@ def run_preflight_diagnostics(
 
         # 6. SFTTrainer + PEFT QLoRA/LoRA 2-step train + eval_loss check
         if load_4bit:
-            micro_model = prepare_model_for_kbit_training(micro_model, use_gradient_checkpointing=True)
-        else:
+            micro_model = prepare_model_for_kbit_training(micro_model, use_gradient_checkpointing=use_grad_ckpt)
+        elif use_grad_ckpt:
             micro_model.gradient_checkpointing_enable()
             if hasattr(micro_model, "enable_input_require_grads"):
                 micro_model.enable_input_require_grads()
@@ -621,9 +631,8 @@ def run_preflight_diagnostics(
             for p in m.parameters():
                 if p.__class__.__name__ == "Params4bit":
                     continue
-                target_dt = trainable_dtype if p.requires_grad else compute_dtype
-                if p.dtype != target_dt:
-                    p.data = p.data.to(target_dt)
+                if p.dtype != compute_dtype:
+                    p.data = p.data.to(compute_dtype)
             for b in m.buffers():
                 if b.dtype.is_floating_point and b.dtype != compute_dtype:
                     b.data = b.data.to(compute_dtype)
@@ -648,6 +657,7 @@ def run_preflight_diagnostics(
             per_device_train_batch_size=2,
             per_device_eval_batch_size=2,
             gradient_accumulation_steps=1,
+            gradient_checkpointing=use_grad_ckpt,
             learning_rate=2e-4,
             max_steps=2,
             max_length=64,

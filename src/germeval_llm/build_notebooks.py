@@ -820,7 +820,7 @@ def get_notebooks_spec() -> dict[str, list]:
                 "1. **Module freshness & symbols** (`germeval_llm.*` synced from disk, no stale `sys.modules` cache)\n"
                 "2. **Data splits, manifests & `doc_id` alignment**\n"
                 "3. **Prompt rendering & completion-only loss masking (`-100`)**\n"
-                "4. **Hardware & dtype policy** (`T4 CC 7.5`: `float16` base/4-bit compute + `float32` trainable adapters without `GradScaler`; `L4 CC 8.9`: native `bfloat16`)\n"
+                "4. **Hardware & dtype policy** (`T4 CC 7.5`: `float16` 4-bit/LoRA Tensor Core compute, `sdpa` attention, `grad_ckpt=False`; `L4 CC 8.9`: native `bfloat16`)\n"
                 "5. **4-bit `NF4` quantization (`bitsandbytes`)** on a micro `Gemma2ForCausalLM`\n"
                 "6. **`SFTTrainer` + `PEFT` 2-step train & validation loop** (`completion_only_loss=True`, `prediction_loss_only=True`, `paged_adamw_8bit`)\n"
                 "7. **Adapter save/reload (`PeftModel`) & greedy `model.generate`**\n"
