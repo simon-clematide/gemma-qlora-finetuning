@@ -110,8 +110,33 @@ def estimate_gemma_parameter_and_memory_profile(
     }
 
 
+def _patch_optional_peft_dependency_checks() -> None:
+    """Guard against outdated optional packages pre-installed on Google Colab (e.g., torchao 0.10.0)
+    causing peft.import_utils.is_torchao_available() to raise ImportError when importing peft/trl.
+    """
+    try:
+        import peft.import_utils as piu
+
+        for fn_name in ("is_torchao_available", "is_gptqmodel_available"):
+            orig_fn = getattr(piu, fn_name, None)
+            if orig_fn is not None and not getattr(orig_fn, "_germeval_safe_wrapped", False):
+                def _make_safe(f: Any) -> Any:
+                    def _safe(*args: Any, **kwargs: Any) -> bool:
+                        try:
+                            return bool(f(*args, **kwargs))
+                        except ImportError:
+                            return False
+                    _safe._germeval_safe_wrapped = True  # type: ignore[attr-defined]
+                    return _safe
+
+                setattr(piu, fn_name, _make_safe(orig_fn))
+    except Exception:
+        pass
+
+
 def build_peft_lora_config(cfg: dict[str, Any]) -> Any:
     """Instantiate a `peft.LoraConfig` from a YAML config dictionary."""
+    _patch_optional_peft_dependency_checks()
     from peft import LoraConfig
 
     p = cfg["peft"]
@@ -140,6 +165,7 @@ def run_sft_adapter_training(
     Uses TRL `SFTConfig(completion_only_loss=True)` with explicit `prompt` and `completion` dataset columns so
     100% of prompt tokens up to `<start_of_turn>model\\n` are masked with `-100`.
     """
+    _patch_optional_peft_dependency_checks()
     import json
     import time
     import torch
@@ -426,6 +452,7 @@ def run_preflight_diagnostics(
       7. Adapter save/reload (`PeftModel.from_pretrained`) & greedy `model.generate`
       8. Hugging Face gated access (`google/gemma-2-2b-it`) & paired bootstrap / plotting pipeline
     """
+    _patch_optional_peft_dependency_checks()
     import json
     import shutil
     import tempfile

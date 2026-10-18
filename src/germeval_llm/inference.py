@@ -113,6 +113,9 @@ def load_gemma_model_and_tokenizer(
         model = model.to("mps")
 
     if adapter_path is not None and Path(adapter_path).exists():
+        from germeval_llm.training import _patch_optional_peft_dependency_checks
+
+        _patch_optional_peft_dependency_checks()
         from peft import PeftModel
 
         model = PeftModel.from_pretrained(model, str(adapter_path))
