@@ -25,6 +25,22 @@ def load_training_config(config_path: str | Path) -> dict[str, Any]:
         return yaml.safe_load(f)
 
 
+def resolve_training_batch_sizes(
+    training_config: dict[str, Any], *, is_t4_class_gpu: bool,
+) -> tuple[int, int]:
+    """Cap T4 microbatches at two while preserving examples per optimizer step."""
+    configured_batch = int(training_config.get("per_device_train_batch_size", 4))
+    configured_accumulation = int(training_config.get("gradient_accumulation_steps", 4))
+    if configured_batch < 1 or configured_accumulation < 1:
+        raise ValueError("Training batch size and gradient accumulation must be positive")
+    if not is_t4_class_gpu:
+        return configured_batch, configured_accumulation
+    examples_per_step = configured_batch * configured_accumulation
+    # For an odd target use one example, keeping the target exact.
+    microbatch = math.gcd(min(2, configured_batch), examples_per_step)
+    return microbatch, examples_per_step // microbatch
+
+
 def compute_training_budget(
     num_examples: int,
     effective_batch_size: int = 16,
@@ -343,8 +359,7 @@ def run_sft_adapter_training(
     except Exception:
         pass
 
-    train_bs = 2 if is_t4_class_gpu else int(tcfg.get("per_device_train_batch_size", 4))
-    grad_accum = int(tcfg.get("gradient_accumulation_steps", 4))
+    train_bs, grad_accum = resolve_training_batch_sizes(tcfg, is_t4_class_gpu=is_t4_class_gpu)
 
     sft_config = SFTConfig(
         output_dir=str(out_dir / "checkpoints"),

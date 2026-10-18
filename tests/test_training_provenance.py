@@ -60,3 +60,24 @@ def test_training_pins_tokenizer_and_model_revision(tmp_path, monkeypatch, revis
         training.run_sft_adapter_training(config_path, data, data, tmp_path / "adapter")
     assert [call[0] for call in calls] == ["tokenizer", "model"]
     assert all(call[2]["revision"] == (revision or "main") for call in calls)
+
+
+@pytest.mark.parametrize(
+    "batch,accumulation,t4,expected",
+    [(4, 4, True, (2, 8)), (4, 4, False, (4, 4)),
+     (1, 4, True, (1, 4)), (2, 4, True, (2, 4)), (3, 3, True, (1, 9))],
+)
+def test_t4_batch_fallback_preserves_examples_per_step(batch, accumulation, t4, expected):
+    config = {"per_device_train_batch_size": batch, "gradient_accumulation_steps": accumulation}
+    actual = training.resolve_training_batch_sizes(config, is_t4_class_gpu=t4)
+    assert actual == expected
+    assert actual[0] * actual[1] == batch * accumulation
+
+
+def test_default_qlora_t4_batch_matches_lora():
+    qlora = training.load_training_config("configs/qlora.yaml")["training"]
+    lora = training.load_training_config("configs/lora.yaml")["training"]
+    t4 = training.resolve_training_batch_sizes(qlora, is_t4_class_gpu=True)
+    mps = training.resolve_training_batch_sizes(lora, is_t4_class_gpu=False)
+    assert t4 == (2, 8)
+    assert t4[0] * t4[1] == mps[0] * mps[1] == 16
