@@ -112,14 +112,20 @@ def estimate_gemma_parameter_and_memory_profile(
 
 def _patch_optional_peft_dependency_checks() -> None:
     """Guard against outdated optional packages pre-installed on Google Colab (e.g., torchao 0.10.0)
-    causing peft.import_utils.is_torchao_available() to raise ImportError when importing peft/trl.
+    causing peft.import_utils.is_torchao_available() to raise ImportError inside peft submodules
+    (including modules that already imported `from peft.import_utils import is_torchao_available`).
     """
     try:
+        import sys
         import peft.import_utils as piu
 
         for fn_name in ("is_torchao_available", "is_gptqmodel_available"):
             orig_fn = getattr(piu, fn_name, None)
-            if orig_fn is not None and not getattr(orig_fn, "_germeval_safe_wrapped", False):
+            if orig_fn is None:
+                continue
+            if getattr(orig_fn, "_germeval_safe_wrapped", False):
+                safe_fn = orig_fn
+            else:
                 def _make_safe(f: Any) -> Any:
                     def _safe(*args: Any, **kwargs: Any) -> bool:
                         try:
@@ -129,7 +135,13 @@ def _patch_optional_peft_dependency_checks() -> None:
                     _safe._germeval_safe_wrapped = True  # type: ignore[attr-defined]
                     return _safe
 
-                setattr(piu, fn_name, _make_safe(orig_fn))
+                safe_fn = _make_safe(orig_fn)
+                setattr(piu, fn_name, safe_fn)
+
+            for mod in list(sys.modules.values()):
+                if mod is not None and getattr(mod, "__name__", "").startswith("peft"):
+                    if hasattr(mod, fn_name):
+                        setattr(mod, fn_name, safe_fn)
     except Exception:
         pass
 
