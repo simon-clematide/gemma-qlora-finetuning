@@ -387,8 +387,14 @@ def test_demo_access_blocks_before_setup_and_skips_replay(monkeypatch) -> None:
     access = next(cell.source for cell in nb.cells if cell.cell_type == 'code')
     calls = []
     hub = ModuleType('huggingface_hub')
-    hub.get_token = lambda: None
-    hub.login = lambda **kwargs: calls.append('login')
+    saved_token = [None]
+    hub.get_token = lambda: saved_token[0]
+
+    def login(**kwargs):
+        calls.append('login')
+        saved_token[0] = kwargs['token']
+
+    hub.login = login
     hub.HfApi = lambda: SimpleNamespace(auth_check=lambda *args, **kwargs: calls.append('check'))
     torch = ModuleType('torch')
     torch.cuda = SimpleNamespace(is_available=lambda: True)
@@ -407,17 +413,37 @@ def test_demo_access_blocks_before_setup_and_skips_replay(monkeypatch) -> None:
     assert '_access_token' not in scope
 
     calls.clear()
-    hub.get_token = lambda: 'test-only-saved-token'
+    saved_token[0] = 'test-only-saved-token'
     exec(access, {})
     assert calls == ['check', 'login']
+
+    calls.clear()
+    def check_replacement(*args, **kwargs):
+        calls.append('check')
+        if kwargs['token'] == 'test-only-saved-token':
+            raise ValueError('sensitive error detail')
+
+    hub.HfApi = lambda: SimpleNamespace(auth_check=check_replacement)
+    exec(access, {})
+    assert calls == ['check', 'hidden prompt', 'check', 'login']
+
+    # A Colab secret may still override login's saved replacement.
+    saved_token[0] = 'test-only-saved-token'
+    hub.login = lambda **kwargs: calls.append('login')
+    scope = {}
+    with pytest.raises(RuntimeError, match='overrides the token'):
+        exec(access, scope)
+    assert '_access_token' not in scope
 
     def denied(*args, **kwargs):
         raise ValueError('sensitive error detail')
 
     hub.HfApi = lambda: SimpleNamespace(auth_check=denied)
     scope = {}
-    with pytest.raises(RuntimeError, match='Setup has not started'):
+    with pytest.raises(RuntimeError, match='ValueError') as failure:
         exec(access, scope)
+    assert 'sensitive error detail' not in str(failure.value)
+    assert 'Setup has not started' in str(failure.value)
     assert '_access_token' not in scope
 
     calls.clear()
