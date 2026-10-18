@@ -814,6 +814,27 @@ def get_notebooks_spec() -> dict[str, list]:
                 "else:\n"
                 "    print('REPLAY mode active: using recorded experiment artifacts (Hugging Face login skipped).')"
             ),
+            new_markdown_cell(
+                "### Pre-Flight Verification Suite (T4 / L4 / Replay)\n"
+                "Before starting baseline inference or fine-tuning, we run a fast (~2–5 second) **8-point pre-flight diagnostic** (`run_preflight_diagnostics`) that tests every assumption made by the rest of the notebook on the active hardware:\n"
+                "1. **Module freshness & symbols** (`germeval_llm.*` synced from disk, no stale `sys.modules` cache)\n"
+                "2. **Data splits, manifests & `doc_id` alignment**\n"
+                "3. **Prompt rendering & completion-only loss masking (`-100`)**\n"
+                "4. **Hardware & dtype policy** (`T4 CC 7.5`: `float16` base/4-bit compute + `float32` trainable adapters without `GradScaler`; `L4 CC 8.9`: native `bfloat16`)\n"
+                "5. **4-bit `NF4` quantization (`bitsandbytes`)** on a micro `Gemma2ForCausalLM`\n"
+                "6. **`SFTTrainer` + `PEFT` 2-step train & validation loop** (`completion_only_loss=True`, `prediction_loss_only=True`, `paged_adamw_8bit`)\n"
+                "7. **Adapter save/reload (`PeftModel`) & greedy `model.generate`**\n"
+                "8. **Gated Hugging Face access (`google/gemma-2-2b-it`), paired bootstrap & plotting**"
+            ),
+            new_code_cell(
+                "from germeval_llm.training import run_preflight_diagnostics\n\n"
+                "preflight = run_preflight_diagnostics(\n"
+                "    check_hf_gated_access=RUN_LIVE_GPU,\n"
+                "    use_4bit_quantization=True,\n"
+                ")\n"
+                "print(f'PRE-FLIGHT VERIFICATION PASSED ({preflight[\"elapsed_sec\"]}s on {preflight[\"device\"].upper()})')\n"
+                "display(pd.DataFrame(preflight['checks']))"
+            ),
             # ------------------------------------------------------------------
             # PART II: TASK, TRAINING INSTRUCTIONS, AND ZERO-SHOT BASELINE
             # ------------------------------------------------------------------

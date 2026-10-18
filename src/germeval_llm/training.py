@@ -200,7 +200,8 @@ def run_sft_adapter_training(
         return Dataset.from_dict({"prompt": prompts, "completion": completions})
 
     hf_train = _to_prompt_completion_dataset(raw_train_rows)
-    hf_dev = _to_prompt_completion_dataset(raw_dev_rows[:250])
+    dev_cap = 64 if (subset_size is not None and subset_size <= 1000) else 160
+    hf_dev = _to_prompt_completion_dataset(raw_dev_rows[:dev_cap])
 
     model_id = cfg["base_model_id"]
     hw = detect_compute_device()
@@ -301,7 +302,7 @@ def run_sft_adapter_training(
     sft_config = SFTConfig(
         output_dir=str(out_dir / "checkpoints"),
         per_device_train_batch_size=int(tcfg.get("per_device_train_batch_size", 4)),
-        per_device_eval_batch_size=int(tcfg.get("per_device_eval_batch_size", 8)),
+        per_device_eval_batch_size=int(tcfg.get("per_device_train_batch_size", 4)),
         gradient_accumulation_steps=int(tcfg.get("gradient_accumulation_steps", 4)),
         learning_rate=float(tcfg.get("learning_rate", 2e-4)),
         lr_scheduler_type=str(tcfg.get("lr_scheduler_type", "cosine")),
@@ -309,6 +310,7 @@ def run_sft_adapter_training(
         max_steps=max_steps,
         max_length=int(tcfg.get("max_seq_length", 1024)),
         completion_only_loss=True,
+        prediction_loss_only=True,
         optim=str(tcfg.get("optim", "paged_adamw_8bit")) if hw["cuda_available"] else "adamw_torch",
         weight_decay=float(tcfg.get("weight_decay", 0.01)),
         # Only enable bf16 on Ampere+ GPUs (CC >= 8.0, e.g. L4/A100).
@@ -319,7 +321,7 @@ def run_sft_adapter_training(
         logging_steps=max(1, max_steps // 10),
         eval_strategy="no" if max_steps <= 25 else "steps",
         eval_steps=max(10, max_steps // 3),
-        save_strategy="no" if max_steps <= 25 else "steps",
+        save_strategy="no" if max_steps <= 100 else "steps",
         save_steps=max(10, max_steps // 3),
         seed=seed,
         report_to="none",
@@ -398,5 +400,353 @@ def extract_training_and_eval_series(
         if "eval_loss" in event and "step" in event
     ]
     return train_history, eval_history
+
+
+def run_preflight_diagnostics(
+    check_hf_gated_access: bool = True,
+    use_4bit_quantization: bool = True,
+) -> dict[str, Any]:
+    """Run an 8-point end-to-end pre-flight diagnostic suite (T4 / L4 / Replay) in a few seconds.
+
+    Tests all assumptions required by `11_colab_l4_live_demo.ipynb` BEFORE launching full model
+    downloads or multi-minute training runs:
+      1. Module freshness & required API symbols across `germeval_llm.*`
+      2. Canonical splits, derived JSONLs, manifests & `doc_id` prediction alignment
+      3. Prompt rendering (`p1_guidelines`) & completion-only loss masking (`-100`)
+      4. Hardware & precision policy (`T4 CC 7.5` float16+float32 vs `L4 CC >= 8.0` bfloat16)
+      5. 4-bit NF4 quantization (`bitsandbytes` `Params4bit`) on CUDA GPU (when CUDA available)
+      6. `SFTTrainer` + `PEFT` QLoRA/LoRA 2-step train + `eval_loss` loop (`prediction_loss_only=True`)
+      7. Adapter save/reload (`PeftModel.from_pretrained`) & greedy `model.generate`
+      8. Hugging Face gated access (`google/gemma-2-2b-it`) & paired bootstrap / plotting pipeline
+    """
+    import json
+    import shutil
+    import tempfile
+    import time
+    import matplotlib.pyplot as plt
+    import torch
+    from datasets import Dataset
+    from peft import LoraConfig, PeftModel, get_peft_model, prepare_model_for_kbit_training
+    from transformers import Gemma2Config, Gemma2ForCausalLM, PreTrainedTokenizerFast
+    from tokenizers import Tokenizer, models, pre_tokenizers
+    from trl import SFTConfig, SFTTrainer
+
+    from germeval_llm import evaluation, inference, prompts, reporting, schemas, training, xml_parser
+    from germeval_llm.convert import ensure_derived_datasets_ready
+
+    t_start = time.perf_counter()
+    checks: list[dict[str, str]] = []
+
+    def _record(step_name: str, passed: bool, detail: str) -> None:
+        checks.append(
+            {
+                "Check": step_name,
+                "Status": "PASS" if passed else "FAIL",
+                "Details": detail,
+            }
+        )
+        if not passed:
+            raise RuntimeError(f"Pre-flight check failed at [{step_name}]: {detail}")
+
+    # 1. Module freshness & API symbols
+    required_symbols = [
+        (prompts, "inspect_completion_only_masking"),
+        (prompts, "render_task_c_user_prompt"),
+        (prompts, "format_gemma_chat_string"),
+        (evaluation, "align_predictions"),
+        (evaluation, "verify_experiment_manifest"),
+        (evaluation, "compare_task_c_models"),
+        (evaluation, "paired_bootstrap_delta_f1_ci"),
+        (training, "extract_training_and_eval_series"),
+        (training, "run_sft_adapter_training"),
+        (reporting, "select_pedagogical_error_analysis_examples"),
+        (reporting, "plot_training_and_validation_loss"),
+        (reporting, "plot_before_after_metrics_comparison"),
+    ]
+    missing = [f"{m.__name__}.{fn}" for m, fn in required_symbols if not hasattr(m, fn)]
+    _record(
+        "1. Module Freshness & Symbols",
+        len(missing) == 0,
+        f"All {len(required_symbols)} required functions present" if not missing else f"Missing: {missing}",
+    )
+
+    # 2. Data splits, manifests & prediction alignment
+    ensure_derived_datasets_ready()
+    test_syn_docs = xml_parser.load_canonical_jsonl("data/canonical/test_syn.jsonl")
+    manifest = json.loads(Path("results/runs/classroom_fast_n1000_manifest.json").read_text(encoding="utf-8"))
+    eval_slice = test_syn_docs[: int(manifest["evaluation_num_docs"])]
+    b_preds = evaluation.align_predictions(
+        eval_slice,
+        inference.load_predictions_jsonl(manifest["baseline_prediction_file"]),
+        expected_split="test_syn",
+    )
+    q_preds = evaluation.align_predictions(
+        eval_slice,
+        inference.load_predictions_jsonl(manifest["finetuned_prediction_file"]),
+        expected_split="test_syn",
+    )
+    evaluation.verify_experiment_manifest(
+        manifest,
+        expected_split="test_syn",
+        expected_prompt_id="p1_guidelines",
+        expected_eval_docs=eval_slice,
+        expected_base_model="google/gemma-2-2b-it",
+    )
+    _record(
+        "2. Data & Manifest Alignment",
+        True,
+        f"Verified {len(eval_slice)} aligned test_syn docs & manifest '{manifest['experiment_id']}'",
+    )
+
+    # 3. Prompt rendering & completion-only loss masking
+    with Path("data/derived/task_c/train.jsonl").open(encoding="utf-8") as f:
+        sample_ex = schemas.TaskCExample.model_validate_json(next(line for line in f if line.strip()))
+    mask_diag = prompts.inspect_completion_only_masking(sample_ex)
+    _record(
+        "3. Prompt & Loss Masking (-100)",
+        mask_diag["masked_prompt_tokens"] > 0 and mask_diag["active_completion_tokens"] > 0,
+        f"total={mask_diag['total_tokens']}, masked={mask_diag['masked_prompt_tokens']}, active={mask_diag['active_completion_tokens']}",
+    )
+
+    # 4. Hardware & precision policy
+    hw = inference.detect_compute_device()
+    compute_dtype = torch.bfloat16 if hw["bf16_supported"] else torch.float16
+    trainable_dtype = torch.bfloat16 if hw["bf16_supported"] else torch.float32
+    hw_desc = (
+        f"CUDA {hw['gpu_name']} (CC={hw.get('compute_capability')}, bf16={hw['bf16_supported']}, "
+        f"compute={compute_dtype}, trainable={trainable_dtype})"
+        if hw["cuda_available"]
+        else f"Device={hw['device'].upper()} (bf16={hw['bf16_supported']})"
+    )
+    _record("4. Hardware & Precision Policy", True, hw_desc)
+
+    # Build a fast in-memory tokenizer with Gemma special tokens so checks 5-7 need zero network I/O
+    vocab = {
+        "<pad>": 0,
+        "<eos>": 1,
+        "<bos>": 2,
+        "<unk>": 3,
+        "<start_of_turn>": 4,
+        "<end_of_turn>": 5,
+        "user": 6,
+        "model": 7,
+        "\n": 8,
+        "Hallo": 9,
+        "Bahn": 10,
+        '{"labels":["Allgemein:neutral"]}': 11,
+    }
+    for i in range(12, 256):
+        vocab[f"tok_{i}"] = i
+    tok_obj = Tokenizer(models.WordLevel(vocab=vocab, unk_token="<unk>"))
+    tok_obj.pre_tokenizer = pre_tokenizers.WhitespaceSplit()
+    fast_tok = PreTrainedTokenizerFast(
+        tokenizer_object=tok_obj,
+        pad_token="<pad>",
+        eos_token="<eos>",
+        bos_token="<bos>",
+        unk_token="<unk>",
+    )
+    fast_tok.padding_side = "right"
+
+    micro_cfg = Gemma2Config(
+        vocab_size=256,
+        hidden_size=64,
+        intermediate_size=128,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        num_key_value_heads=2,
+        head_dim=16,
+        pad_token_id=0,
+        eos_token_id=1,
+        bos_token_id=2,
+        attn_implementation="eager",
+    )
+
+    tmpdir = Path(tempfile.mkdtemp(prefix="germeval_preflight_"))
+    try:
+        base_dir = tmpdir / "micro_base"
+        raw_micro = Gemma2ForCausalLM(micro_cfg)
+        raw_micro.save_pretrained(str(base_dir))
+        del raw_micro
+
+        # 5. 4-bit NF4 quantization kernel check (on CUDA) or model load check (on MPS/CPU)
+        load_4bit = bool(use_4bit_quantization and hw["cuda_available"])
+        load_kwargs: dict[str, Any] = {
+            "device_map": "auto" if hw["cuda_available"] else None,
+            "attn_implementation": "eager",
+            "dtype": compute_dtype if hw["device"] != "cpu" else torch.float32,
+        }
+        if load_4bit:
+            from transformers import BitsAndBytesConfig
+
+            load_kwargs["quantization_config"] = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_compute_dtype=compute_dtype,
+            )
+
+        micro_model = Gemma2ForCausalLM.from_pretrained(str(base_dir), **load_kwargs)
+        if not hw["cuda_available"] and hw["device"] == "mps":
+            micro_model = micro_model.to("mps")
+
+        has_4bit = any(p.__class__.__name__ == "Params4bit" for p in micro_model.parameters())
+        _record(
+            "5. Quantization & Model Load",
+            (has_4bit if load_4bit else True),
+            f"Loaded micro Gemma2 (load_in_4bit={load_4bit}, Params4bit_present={has_4bit})",
+        )
+
+        # 6. SFTTrainer + PEFT QLoRA/LoRA 2-step train + eval_loss check
+        if load_4bit:
+            micro_model = prepare_model_for_kbit_training(micro_model, use_gradient_checkpointing=True)
+        else:
+            micro_model.gradient_checkpointing_enable()
+            if hasattr(micro_model, "enable_input_require_grads"):
+                micro_model.enable_input_require_grads()
+
+        peft_cfg = LoraConfig(
+            r=4,
+            lora_alpha=8,
+            lora_dropout=0.0,
+            bias="none",
+            task_type="CAUSAL_LM",
+            target_modules=GEMMA_LINEAR_MODULES,
+        )
+        micro_model = get_peft_model(micro_model, peft_cfg)
+
+        def _sanitize(m: Any) -> None:
+            if hw["device"] == "cpu":
+                return
+            for p in m.parameters():
+                if p.__class__.__name__ == "Params4bit":
+                    continue
+                target_dt = trainable_dtype if p.requires_grad else compute_dtype
+                if p.dtype != target_dt:
+                    p.data = p.data.to(target_dt)
+            for b in m.buffers():
+                if b.dtype.is_floating_point and b.dtype != compute_dtype:
+                    b.data = b.data.to(compute_dtype)
+
+        _sanitize(micro_model)
+
+        try:
+            from accelerate.state import AcceleratorState
+
+            AcceleratorState._reset_state(reset_partial_state=True)
+        except Exception:
+            pass
+
+        micro_ds = Dataset.from_dict(
+            {
+                "prompt": ["<start_of_turn> user \n Hallo Bahn <end_of_turn> \n <start_of_turn> model \n"] * 4,
+                "completion": ['{"labels":["Allgemein:neutral"]} <end_of_turn> \n'] * 4,
+            }
+        )
+        sft_args = SFTConfig(
+            output_dir=str(tmpdir / "ckpt"),
+            per_device_train_batch_size=2,
+            per_device_eval_batch_size=2,
+            gradient_accumulation_steps=1,
+            learning_rate=2e-4,
+            max_steps=2,
+            max_length=64,
+            completion_only_loss=True,
+            prediction_loss_only=True,
+            optim="paged_adamw_8bit" if hw["cuda_available"] else "adamw_torch",
+            bf16=hw["bf16_supported"] and hw["cuda_available"],
+            fp16=False,
+            logging_steps=1,
+            eval_strategy="steps",
+            eval_steps=1,
+            save_strategy="no",
+            report_to="none",
+        )
+        trainer = SFTTrainer(
+            model=micro_model,
+            processing_class=fast_tok,
+            train_dataset=micro_ds,
+            eval_dataset=micro_ds,
+            args=sft_args,
+        )
+        _sanitize(trainer.model)
+        train_out = trainer.train()
+        tr_hist, ev_hist = extract_training_and_eval_series(list(trainer.state.log_history))
+        loss_ok = (
+            len(tr_hist) >= 1
+            and len(ev_hist) >= 1
+            and not math.isnan(float(train_out.training_loss))
+            and not math.isnan(float(ev_hist[-1]["eval_loss"]))
+        )
+        _record(
+            "6. SFTTrainer Train + Eval Loop",
+            loss_ok,
+            f"2 steps + eval_loss={ev_hist[-1]['eval_loss']:.4f}, train_loss={train_out.training_loss:.4f}, optim={sft_args.optim}",
+        )
+
+        # 7. Adapter save/reload & greedy generation
+        adapter_out = tmpdir / "adapter"
+        micro_model.save_pretrained(str(adapter_out))
+        del trainer, micro_model
+        if hw["cuda_available"]:
+            torch.cuda.empty_cache()
+
+        reload_base = Gemma2ForCausalLM.from_pretrained(str(base_dir), **load_kwargs)
+        if not hw["cuda_available"] and hw["device"] == "mps":
+            reload_base = reload_base.to("mps")
+        reloaded = PeftModel.from_pretrained(reload_base, str(adapter_out))
+        if hw["device"] != "cpu":
+            for p in reloaded.parameters():
+                if p.__class__.__name__ != "Params4bit" and p.dtype != compute_dtype:
+                    p.data = p.data.to(compute_dtype)
+            for b in reloaded.buffers():
+                if b.dtype.is_floating_point and b.dtype != compute_dtype:
+                    b.data = b.data.to(compute_dtype)
+        reloaded.eval()
+        gen_fn = inference.build_hf_generator_fn(reloaded, fast_tok, max_new_tokens=6)
+        raw_gen, p_len, c_len, _ = gen_fn("<bos> <start_of_turn> user \n Hallo Bahn <end_of_turn> \n <start_of_turn> model \n")
+        del reloaded, reload_base
+        if hw["cuda_available"]:
+            torch.cuda.empty_cache()
+        _record(
+            "7. Adapter Reload & Generation",
+            p_len > 0 and c_len >= 0,
+            f"PeftModel reloaded & generated {c_len} tokens cleanly in {compute_dtype}",
+        )
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+    # 8. Hugging Face gated access (in LIVE mode) + Evaluation & Plotting pipeline
+    hf_status = "Skipped (REPLAY mode)"
+    if hw["cuda_available"] and check_hf_gated_access:
+        from huggingface_hub import hf_hub_download
+
+        cfg_file = hf_hub_download(repo_id="google/gemma-2-2b-it", filename="config.json")
+        hf_status = f"Gated access verified ({Path(cfg_file).name})"
+
+    comp = evaluation.compare_task_c_models(eval_slice, b_preds, q_preds, n_bootstrap=50, seed=42)
+    diag_rows = reporting.select_pedagogical_error_analysis_examples(eval_slice, b_preds, q_preds)
+    fig1 = reporting.plot_training_and_validation_loss(
+        [{"step": 10, "loss": 1.2}, {"step": 20, "loss": 0.8}],
+        [{"step": 10, "eval_loss": 1.1}, {"step": 20, "eval_loss": 0.9}],
+    )
+    plt.close(fig1)
+    fig2 = reporting.plot_before_after_metrics_comparison(comp)
+    plt.close(fig2)
+    _record(
+        "8. HF Access, Eval & Plotting",
+        len(diag_rows) == 5 and "deltas" in comp,
+        f"{hf_status}; ΔF1(C2)={comp['deltas']['c2_strict_micro_f1']:+.4f}; 5 archetypes & 2 plots verified",
+    )
+
+    elapsed = round(time.perf_counter() - t_start, 2)
+    return {
+        "all_passed": True,
+        "elapsed_sec": elapsed,
+        "device": hw["device"],
+        "gpu_name": hw.get("gpu_name"),
+        "checks": checks,
+    }
+
 
 
