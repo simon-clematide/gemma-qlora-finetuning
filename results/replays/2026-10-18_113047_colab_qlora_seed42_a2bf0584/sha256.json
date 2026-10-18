@@ -1,0 +1,14 @@
+{
+  "README.md": "5b62e436262779fb30066f67b3dae7282f1e9555e4a98b728df50611ef90337d",
+  "baseline_predictions.jsonl": "58c47e29c75e6a3cf19d3088b74bafa5390d2df575f7a75097ccd603da746931",
+  "comparison.json": "f6157a38acce11213aff07d28ad6b756581c0c4191d59578e76aecb7d3145593",
+  "comparison.png": "c7d59d9b8735e000119675c732bf169dc7dfc83462773249721f49ce0980b29e",
+  "dataset.yaml": "4e39304b4847ab3e393bba99ac55d7aa7e0a21234afb84ea422fcd8fee252f70",
+  "evaluation_documents.jsonl": "cc420e30d084b9814dc2836da1cdb1f4b08ed998611367e6371bc57ebb4cb60b",
+  "finetuned_predictions.jsonl": "bdeeb59798b4c70644cf3b50e49b0723e4d9b5f02111f5e02b5746898b1be44a",
+  "loss.png": "b10cb7f1ded3cf297363f92e7dd1c719b99c0f1361dea505c09ec9b23c278920",
+  "manifest.json": "576caade90551ff42e70d735d9941c275b7cd116d742a70b53c74a23654602e9",
+  "prompts.yaml": "cc386fa6b28b3025bfacaf03fca641238407b735356305a3c9607b26aa301394",
+  "training_config.yaml": "e28b3ff1986b39a1064ae496db56c36aa1bf82e79263d821e4c7f2b63b4ac118",
+  "training_summary.json": "e8cfb3d88df1b16c7fd1007cebfcbfa83049194700101c1df95aa7f137df3e50"
+}

@@ -1,0 +1,40 @@
+base_model_id: google/gemma-2-2b-it
+load_in_4bit: true
+method: qlora
+model_revision: 299a8560bedf22ed1c72a8a11e7dce4a7f9f51f8
+peft:
+  bias: none
+  lora_alpha: 32
+  lora_dropout: 0.05
+  r: 16
+  target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+  task_type: CAUSAL_LM
+quantization:
+  bnb_4bit_compute_dtype: bfloat16
+  bnb_4bit_quant_type: nf4
+  bnb_4bit_use_double_quant: true
+training:
+  effective_batch_size: 16
+  eval_strategy: epoch
+  gradient_accumulation_steps: 4
+  learning_rate: 0.0002
+  lr_scheduler_type: cosine
+  max_seq_length: 1152
+  metric_for_best_model: task_c2_micro_f1
+  min_optimizer_steps_floor: 100
+  num_train_epochs: 3
+  optim: paged_adamw_8bit
+  packing: false
+  per_device_eval_batch_size: 8
+  per_device_train_batch_size: 4
+  save_strategy: epoch
+  seed: 42
+  warmup_ratio: 0.05
+  weight_decay: 0.01
