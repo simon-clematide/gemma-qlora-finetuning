@@ -391,11 +391,11 @@ def test_demo_access_blocks_before_setup_and_skips_replay(monkeypatch) -> None:
     hub.get_token = lambda: saved_token[0]
 
     def login(**kwargs):
-        calls.append('login')
-        saved_token[0] = kwargs['token']
+        calls.append(('login', kwargs))
+        saved_token[0] = 'test-only-logged-in-token'
 
     hub.login = login
-    hub.HfApi = lambda: SimpleNamespace(auth_check=lambda *args, **kwargs: calls.append('check'))
+    hub.HfApi = lambda: SimpleNamespace(auth_check=lambda *args, **kwargs: calls.append(('check', kwargs.get('token'))))
     torch = ModuleType('torch')
     torch.cuda = SimpleNamespace(is_available=lambda: True)
     monkeypatch.setitem(sys.modules, 'huggingface_hub', hub)
@@ -404,99 +404,54 @@ def test_demo_access_blocks_before_setup_and_skips_replay(monkeypatch) -> None:
     monkeypatch.setattr(importlib.util, 'find_spec', lambda name: (
         True if name in {'torch', 'huggingface_hub'} else original_find_spec(name)
     ))
-    monkeypatch.setattr('getpass.getpass', lambda prompt: calls.append('hidden prompt') or 'test-only-token')
 
+    # Case 1: Saved valid token already exists
+    saved_token[0] = 'test-only-saved-token'
     scope = {}
     exec(access, scope)
     assert scope['RUN_LIVE_GPU'] is True
-    assert calls == ['hidden prompt', 'check', 'login']
-    assert '_access_token' not in scope
+    assert calls == [('check', 'test-only-saved-token')]
+    assert '_token' not in scope
 
+    # Case 2: No saved token -> calls login(skip_if_logged_in=False)
     calls.clear()
-    saved_token[0] = 'test-only-saved-token'
+    saved_token[0] = None
     exec(access, {})
-    assert calls == ['check', 'login']
+    assert calls == [('login', {'skip_if_logged_in': False}), ('check', 'test-only-logged-in-token')]
 
+    # Case 3: Saved token invalid -> re-triggers login
     calls.clear()
     def check_replacement(*args, **kwargs):
-        calls.append('check')
-        if kwargs['token'] == 'test-only-saved-token':
-            raise ValueError('sensitive error detail')
+        calls.append(('check', kwargs.get('token')))
+        if kwargs.get('token') == 'bad-token':
+            raise ValueError('bad token detail')
 
     hub.HfApi = lambda: SimpleNamespace(auth_check=check_replacement)
+    saved_token[0] = 'bad-token'
     exec(access, {})
-    assert calls == ['check', 'hidden prompt', 'check', 'login']
+    assert calls == [
+        ('check', 'bad-token'),
+        ('login', {'skip_if_logged_in': False}),
+        ('check', 'test-only-logged-in-token'),
+    ]
 
-    # A Colab secret may still override login's saved replacement.
-    saved_token[0] = 'test-only-saved-token'
-    hub.login = lambda **kwargs: calls.append('login')
-    scope = {}
-    with pytest.raises(RuntimeError, match='overrides the token'):
-        exec(access, scope)
-    assert '_access_token' not in scope
-
-    # Device fallback is blocking and contains no token in its command arguments.
-    import subprocess
-
-    def device_run(command, **kwargs):
-        assert command == ['/mock/hf', 'auth', 'login', '--force', '--format', 'agent']
-        assert kwargs == {'check': True}
-        calls.append('device login')
-        saved_token[0] = 'test-only-device-token'
-
-    monkeypatch.setattr('importlib.metadata.version', lambda name: '1.20.1')
-    monkeypatch.setattr('shutil.which', lambda name: '/mock/hf')
-    monkeypatch.setattr(subprocess, 'run', device_run)
-    hub.login = login
-    hub.HfApi = lambda: SimpleNamespace(auth_check=lambda *args, **kwargs: calls.append('check'))
-    monkeypatch.setattr('getpass.getpass', lambda prompt: calls.append('hidden prompt') or '')
-    saved_token[0] = None
-    calls.clear()
-    exec(access, {})
-    assert calls == ['hidden prompt', 'device login', 'check', 'login']
-
-    def reject_pasted(*args, **kwargs):
-        calls.append('check')
-        if kwargs['token'] == 'test-only-token':
-            raise ValueError('sensitive error detail')
-
-    hub.HfApi = lambda: SimpleNamespace(auth_check=reject_pasted)
-    monkeypatch.setattr('getpass.getpass', lambda prompt: calls.append('hidden prompt') or 'test-only-token')
-    saved_token[0] = None
-    calls.clear()
-    exec(access, {})
-    assert calls == ['hidden prompt', 'check', 'device login', 'check', 'login']
-
-    def expired(*args, **kwargs):
-        raise subprocess.CalledProcessError(1, '/mock/hf')
-
-    monkeypatch.setattr(subprocess, 'run', expired)
-    saved_token[0] = None
-    with pytest.raises(RuntimeError, match='CalledProcessError'):
-        exec(access, {})
-    monkeypatch.setattr(subprocess, 'run', device_run)
-
-    saved_token[0] = None
-    calls.clear()
-    monkeypatch.setattr('importlib.metadata.version', lambda name: '0.36.0')
-    with pytest.raises(RuntimeError, match='huggingface-hub >= 1.20.1'):
-        exec(access, {})
-    assert 'device login' not in calls
-    monkeypatch.setattr('importlib.metadata.version', lambda name: '1.20.1')
-
+    # Case 4: Login fails or access check denied -> raises clean RuntimeError without leaking details
     def denied(*args, **kwargs):
         raise ValueError('sensitive error detail')
 
     hub.HfApi = lambda: SimpleNamespace(auth_check=denied)
+    saved_token[0] = None
     scope = {}
     with pytest.raises(RuntimeError, match='Gemma access was not verified') as failure:
         exec(access, scope)
     assert 'sensitive error detail' not in str(failure.value)
     assert 'Setup has not started' in str(failure.value)
-    assert '_access_token' not in scope
+    assert '_token' not in scope
 
+    # Case 5: Replay skips login and checks entirely
     calls.clear()
     scope = {}
     exec(access.replace("REQUESTED_MODE = 'auto'", "REQUESTED_MODE = 'replay'", 1), scope)
     assert scope['RUN_LIVE_GPU'] is False
     assert calls == []
+
