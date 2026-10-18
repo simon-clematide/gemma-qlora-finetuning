@@ -81,3 +81,28 @@ def test_default_qlora_t4_batch_matches_lora():
     mps = training.resolve_training_batch_sizes(lora, is_t4_class_gpu=False)
     assert t4 == (2, 8)
     assert t4[0] * t4[1] == mps[0] * mps[1] == 16
+
+
+@pytest.mark.parametrize('gpu,expected', [('NVIDIA L4', (8, 2)), ('Tesla T4', (2, 8))])
+def test_notebook_training_batch_uses_l4_capacity(tmp_path, monkeypatch, gpu, expected):
+    from pathlib import Path
+
+    import nbformat
+
+    notebook = nbformat.read('notebooks/11_colab_l4_live_demo.ipynb', as_version=4)
+    source = next(cell.source for cell in notebook.cells
+                  if cell.cell_type == 'code' and "cfg_dict['training']['per_device_train_batch_size'] = 8" in cell.source)
+    source = source.split('prof = estimate_gemma_parameter_and_memory_profile(')[0]
+    monkeypatch.chdir(tmp_path)
+    # Keep config lookup in the repository while placing generated files in tmp_path.
+    repository = Path(__file__).resolve().parents[1]
+    original_load = training.load_training_config
+    monkeypatch.setattr(training, 'load_training_config', lambda path: original_load(repository / path))
+    scope = dict(RUN_LIVE_GPU=True, USE_4BIT_QUANTIZATION=True, LIVE_RUN_PROFILE='full',
+                 hw={'gpu_name': gpu}, exp_manifest={'model_revision': 'test', 'max_seq_length': 1152},
+                 Path=Path, dev_label=gpu)
+    exec(source, scope)
+    config = scope['cfg_dict']['training']
+    assert training.resolve_training_batch_sizes(config, is_t4_class_gpu='T4' in gpu) == expected
+    assert expected[0] * expected[1] == 16
+    assert 'full' in scope['ADAPTER_DIR']

@@ -171,6 +171,53 @@ def build_hf_generator_fn(
     return _generate
 
 
+def build_hf_batch_generator_fn(
+    model: Any,
+    tokenizer: Any,
+    max_new_tokens: int = 256,
+) -> Callable[[list[str]], list[tuple[str, int, int, float]]]:
+    """Generate left-padded batches; latency is amortized batch wall time per document.
+
+    Completion counts include the first stop token, excluding subsequent padding.
+    Prompts already contain BOS, so no additional special tokens are inserted.
+    """
+    import torch
+
+    device = next(model.parameters()).device
+    eos_ids = [tokenizer.eos_token_id]
+    eot_id = tokenizer.convert_tokens_to_ids("<end_of_turn>")
+    if isinstance(eot_id, int) and eot_id != tokenizer.unk_token_id and eot_id not in eos_ids:
+        eos_ids.append(eot_id)
+
+    def _generate(prompts: list[str]) -> list[tuple[str, int, int, float]]:
+        if not prompts:
+            return []
+        t0 = time.perf_counter()
+        previous_padding = tokenizer.padding_side
+        try:
+            tokenizer.padding_side = "left"
+            inputs = tokenizer(prompts, padding=True, return_tensors="pt", add_special_tokens=False).to(device)
+        finally:
+            tokenizer.padding_side = previous_padding
+        width = int(inputs["input_ids"].shape[1])
+        prompt_lengths = inputs["attention_mask"].sum(dim=1).tolist()
+        with torch.no_grad():
+            outputs = model.generate(
+                **inputs, max_new_tokens=max_new_tokens, do_sample=False,
+                eos_token_id=eos_ids, pad_token_id=tokenizer.pad_token_id,
+            )
+        completions = []
+        for row in outputs[:, width:].tolist():
+            stop = next((i + 1 for i, token in enumerate(row) if token in eos_ids), len(row))
+            completions.append(row[:stop])
+        texts = tokenizer.batch_decode(completions, skip_special_tokens=True)
+        elapsed = (time.perf_counter() - t0) * 1000.0 / len(prompts)
+        return [(text.strip(), int(length), len(tokens), elapsed)
+                for text, length, tokens in zip(texts, prompt_lengths, completions, strict=True)]
+
+    return _generate
+
+
 def run_task_c_inference_with_generator(
     canonical_docs: Sequence[CanonicalDocument],
     run_id: str,
@@ -178,40 +225,56 @@ def run_task_c_inference_with_generator(
     generate_fn: Callable[[str], tuple[str, int, int, float]],
     prompt_key: str = "p1_guidelines",
     few_shot_examples: list[TaskCExample] | None = None,
+    generate_batch_fn: Callable[[list[str]], list[tuple[str, int, int, float]]] | None = None,
+    batch_size: int = 1,
 ) -> list[PredictionRecord]:
     """Run Task C inference over a split using a provided `generate_fn(formatted_prompt) -> (raw_text, p_toks, c_toks, ms)`."""
+    if batch_size < 1:
+        raise ValueError("batch_size must be positive")
     prompts_cfg = load_prompts_config()
     records: list[PredictionRecord] = []
 
-    for doc in canonical_docs:
+    def format_prompt(doc: CanonicalDocument) -> str:
         user_prompt = render_task_c_user_prompt(
-            doc.text,
-            prompt_key=prompt_key,
-            few_shot_examples=few_shot_examples,
+            doc.text, prompt_key=prompt_key, few_shot_examples=few_shot_examples,
             prompts_cfg=prompts_cfg,
         )
-        formatted = format_gemma_chat_string([ChatMessage(role="user", content=user_prompt)])
-        t0 = time.perf_counter()
-        raw_out, p_toks, c_toks, gen_ms = generate_fn(formatted)
-        elapsed_ms = gen_ms if gen_ms > 0 else (time.perf_counter() - t0) * 1000.0
+        return format_gemma_chat_string([ChatMessage(role="user", content=user_prompt)])
 
-        parsed_labels, status, errors = parse_task_c_output(raw_out)
-        records.append(
-            PredictionRecord(
-                run_id=run_id,
-                task="C",
-                split=split,
-                doc_id=doc.doc_id,
-                source_ordinal=doc.source_ordinal,
-                raw_output=raw_out,
-                parse_status=status,
-                parse_errors=errors,
-                parsed_labels=parsed_labels,
-                prompt_tokens=p_toks,
-                completion_tokens=c_toks,
-                latency_ms=round(elapsed_ms, 3),
+    for start in range(0, len(canonical_docs), batch_size):
+        docs = canonical_docs[start:start + batch_size]
+        prompts = [format_prompt(doc) for doc in docs]
+        if generate_batch_fn is not None:
+            results = generate_batch_fn(prompts)
+        else:
+            results = []
+            for prompt in prompts:
+                t0 = time.perf_counter()
+                raw, p_tokens, c_tokens, ms = generate_fn(prompt)
+                if ms <= 0:
+                    ms = (time.perf_counter() - t0) * 1000.0
+                results.append((raw, p_tokens, c_tokens, ms))
+        if len(results) != len(docs):
+            raise ValueError("Generator returned a different number of predictions than documents")
+        for doc, (raw_out, p_toks, c_toks, gen_ms) in zip(docs, results, strict=True):
+            elapsed_ms = gen_ms
+            parsed_labels, status, errors = parse_task_c_output(raw_out)
+            records.append(
+                PredictionRecord(
+                    run_id=run_id,
+                    task="C",
+                    split=split,
+                    doc_id=doc.doc_id,
+                    source_ordinal=doc.source_ordinal,
+                    raw_output=raw_out,
+                    parse_status=status,
+                    parse_errors=errors,
+                    parsed_labels=parsed_labels,
+                    prompt_tokens=p_toks,
+                    completion_tokens=c_toks,
+                    latency_ms=round(elapsed_ms, 3),
+                )
             )
-        )
     return records
 
 

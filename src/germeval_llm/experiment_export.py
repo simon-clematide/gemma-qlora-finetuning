@@ -28,6 +28,7 @@ def export_live_experiment(
     dataset_config: str | Path = "configs/dataset.yaml",
     gold_typo_patches: bool = False,
     sampling_strategy: str = "stratified",
+    inference_batch_size: int = 1,
 ) -> Path:
     """Validate paired predictions and export a new live CUDA run as a ZIP.
 
@@ -74,7 +75,9 @@ def export_live_experiment(
         "max_seq_length": settings["max_length"],
         "effective_batch_size": settings["effective_batch_size"],
         "prompt_id": "p1_guidelines", "n_shots": 0,
-        "generation": {"max_new_tokens": 128, "do_sample": False, "add_special_tokens": False},
+        "generation": {"max_new_tokens": 128, "do_sample": False, "add_special_tokens": False,
+                       "batch_size": inference_batch_size,
+                       "latency_semantics": "amortized batch wall time per document" if inference_batch_size > 1 else "per-document wall time"},
         "gold_typo_patches": gold_typo_patches,
         "evaluation_selection": "first documents in canonical source order, fixed before training",
         "baseline_prediction_file": "baseline_predictions.jsonl",
