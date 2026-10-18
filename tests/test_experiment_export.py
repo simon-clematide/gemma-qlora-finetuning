@@ -52,9 +52,11 @@ def test_live_export_round_trip_and_provenance(tmp_path):
         export_live_experiment(**dict(args, baseline_predictions=[]))
     with pytest.raises(ValueError, match="measured CUDA"):
         export_live_experiment(**dict(args, training_summary=dict(summary, device="mps")))
-    second = export_live_experiment(**dict(args, training_summary=dict(summary, loaded_in_4bit=False)))
+    second = export_live_experiment(**dict(args, training_summary=dict(summary, loaded_in_4bit=False), sampling_strategy="all"))
     assert second != archive
-    assert verify_export_bundle(second.with_suffix(""))["quantization"] == "none"
+    second_manifest = verify_export_bundle(second.with_suffix(""))
+    assert second_manifest["quantization"] == "none"
+    assert second_manifest["sampling_strategy"] == "all"
 
 
 def test_notebook_export_skips_replay_and_downloads_live(monkeypatch, tmp_path):

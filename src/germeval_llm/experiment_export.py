@@ -27,6 +27,7 @@ def export_live_experiment(
     prompt_config: str | Path = "configs/prompts.yaml",
     dataset_config: str | Path = "configs/dataset.yaml",
     gold_typo_patches: bool = False,
+    sampling_strategy: str = "stratified",
 ) -> Path:
     """Validate paired predictions and export a new live CUDA run as a ZIP.
 
@@ -68,7 +69,7 @@ def export_live_experiment(
         "evaluation_doc_ids": [d.doc_id for d in eval_docs],
         "evaluation_num_docs": len(eval_docs),
         "training_subset_size": len(summary["tokenized_training_doc_ids"]),
-        "sampling_strategy": "stratified",
+        "sampling_strategy": sampling_strategy,
         "max_steps": settings["global_step"],
         "max_seq_length": settings["max_length"],
         "effective_batch_size": settings["effective_batch_size"],

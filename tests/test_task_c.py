@@ -455,3 +455,36 @@ def test_demo_access_blocks_before_setup_and_skips_replay(monkeypatch) -> None:
     assert scope['RUN_LIVE_GPU'] is False
     assert calls == []
 
+
+
+def test_demo_full_profile_uses_all_training_and_test_syn_documents() -> None:
+    from types import SimpleNamespace
+
+    import nbformat
+
+    from germeval_llm.evaluation import verify_experiment_manifest
+    from germeval_llm.replay import load_replay_manifest
+
+    notebook = nbformat.read('notebooks/11_colab_l4_live_demo.ipynb', as_version=4)
+    source = next(cell.source for cell in notebook.cells
+                  if cell.cell_type == 'code' and 'TRAIN_SUBSET_SIZE = exp_manifest' in cell.source)
+    settings = source.split('# Verify manifest consistency')[0]
+    recording = load_replay_manifest()
+    test_docs = [SimpleNamespace(doc_id=str(i)) for i in range(200)]
+    for live, profile, train_count, eval_count, steps in [
+        (True, 'full', 1200, 200, 225),
+        (True, 'classroom', 1000, 150, 100),
+        (False, 'full', 1000, 150, 100),
+    ]:
+        scope = dict(recorded_manifest=recording, DEFAULT_CLASSROOM_REPLAY='unused',
+                     RUN_LIVE_GPU=live, LIVE_RUN_PROFILE=profile, USE_4BIT_QUANTIZATION=True,
+                     train_docs=[None] * 1200, test_syn_docs=test_docs)
+        exec(settings, scope)
+        assert scope['TRAIN_SUBSET_SIZE'] == train_count
+        assert len(scope['eval_docs']) == eval_count
+        assert scope['MAX_TRAIN_STEPS'] == steps
+        if live and profile == 'full':
+            assert scope['exp_manifest']['sampling_strategy'] == 'all'
+            verify_experiment_manifest(scope['exp_manifest'], 'test_syn', 'p1_guidelines',
+                                       expected_eval_docs=test_docs)
+    assert recording == load_replay_manifest()
