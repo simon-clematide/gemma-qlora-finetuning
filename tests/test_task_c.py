@@ -435,12 +435,61 @@ def test_demo_access_blocks_before_setup_and_skips_replay(monkeypatch) -> None:
         exec(access, scope)
     assert '_access_token' not in scope
 
+    # Device fallback is blocking and contains no token in its command arguments.
+    import subprocess
+
+    def device_run(command, **kwargs):
+        assert command == ['/mock/hf', 'auth', 'login', '--force', '--format', 'agent']
+        assert kwargs == {'check': True}
+        calls.append('device login')
+        saved_token[0] = 'test-only-device-token'
+
+    monkeypatch.setattr('importlib.metadata.version', lambda name: '1.20.1')
+    monkeypatch.setattr('shutil.which', lambda name: '/mock/hf')
+    monkeypatch.setattr(subprocess, 'run', device_run)
+    hub.login = login
+    hub.HfApi = lambda: SimpleNamespace(auth_check=lambda *args, **kwargs: calls.append('check'))
+    monkeypatch.setattr('getpass.getpass', lambda prompt: calls.append('hidden prompt') or '')
+    saved_token[0] = None
+    calls.clear()
+    exec(access, {})
+    assert calls == ['hidden prompt', 'device login', 'check', 'login']
+
+    def reject_pasted(*args, **kwargs):
+        calls.append('check')
+        if kwargs['token'] == 'test-only-token':
+            raise ValueError('sensitive error detail')
+
+    hub.HfApi = lambda: SimpleNamespace(auth_check=reject_pasted)
+    monkeypatch.setattr('getpass.getpass', lambda prompt: calls.append('hidden prompt') or 'test-only-token')
+    saved_token[0] = None
+    calls.clear()
+    exec(access, {})
+    assert calls == ['hidden prompt', 'check', 'device login', 'check', 'login']
+
+    def expired(*args, **kwargs):
+        raise subprocess.CalledProcessError(1, '/mock/hf')
+
+    monkeypatch.setattr(subprocess, 'run', expired)
+    saved_token[0] = None
+    with pytest.raises(RuntimeError, match='CalledProcessError'):
+        exec(access, {})
+    monkeypatch.setattr(subprocess, 'run', device_run)
+
+    saved_token[0] = None
+    calls.clear()
+    monkeypatch.setattr('importlib.metadata.version', lambda name: '0.36.0')
+    with pytest.raises(RuntimeError, match='huggingface-hub >= 1.20.1'):
+        exec(access, {})
+    assert 'device login' not in calls
+    monkeypatch.setattr('importlib.metadata.version', lambda name: '1.20.1')
+
     def denied(*args, **kwargs):
         raise ValueError('sensitive error detail')
 
     hub.HfApi = lambda: SimpleNamespace(auth_check=denied)
     scope = {}
-    with pytest.raises(RuntimeError, match='ValueError') as failure:
+    with pytest.raises(RuntimeError, match='Gemma access was not verified') as failure:
         exec(access, scope)
     assert 'sensitive error detail' not in str(failure.value)
     assert 'Setup has not started' in str(failure.value)
