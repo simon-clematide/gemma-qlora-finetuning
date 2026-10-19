@@ -118,6 +118,11 @@ This generates both prediction sets from scratch, trains a new LoRA adapter for 
 
 ### 1. Prompting Inference (`P0`, `P1`, `P2`, `P3`, `D1`)
 
+Zero- and few-shot CLI inference for both tasks batches similar-length prompts, checks that prompts plus the output budget fit the model context, and restores source order in predictions. CUDA OOM recovery clears unused cache and retries once before reducing the batch size. It never silently drops documents, shortens text, or changes the demonstrations.
+
+Completed batches are atomically saved under ignored `results/recorded_runs/inference/`. Rerun the same command to resume; model/adapter, precision, prompt/demo, dataset, or batching changes are rejected rather than mixed with earlier results. Choose a new `--run-id` or `--checkpoint-path` for a different experiment. `--batch-size` overrides automatic GPU defaults; `--no-length-grouping` disables grouping, and `--no-checkpoint` disables checkpointing. Use `--model-revision` to pin a model. Checkpoints survive a kernel restart only while the files remain; on Colab, copy the folder to Drive to survive deletion of the virtual machine.
+
+
 Run greedy inference with `google/gemma-2-2b-it` on any split (`dev`, `test_syn`, `test_dia`). On Apple Silicon (`mps`) or CPU, pass `--max-docs` for a fast smoke test:
 
 ```bash

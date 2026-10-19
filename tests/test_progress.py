@@ -41,3 +41,12 @@ def test_training_callback_reports_steps_validation_and_saving(monkeypatch):
     assert 'loss=0.25' in messages[3]
     assert 'Checkpoint saved at step 1' in messages[4]
     assert '100/100' in messages[5]
+
+
+def test_resume_eta_uses_only_work_done_in_current_session():
+    messages = []
+    reporter = progress.ProgressReporter('Documents', messages.append)
+    reporter(80, 100, 0)
+    reporter(85, 100, 60)
+    assert 'ETA estimating' in messages[0]
+    assert 'ETA 3.0 min' in messages[1]

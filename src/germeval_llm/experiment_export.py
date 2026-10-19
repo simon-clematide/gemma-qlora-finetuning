@@ -29,6 +29,8 @@ def export_live_experiment(
     gold_typo_patches: bool = False,
     sampling_strategy: str = "stratified",
     inference_batch_size: int = 1,
+    inference_group_by_length: bool = False,
+    inference_batch_statistics: dict[str, Any] | None = None,
 ) -> Path:
     """Validate paired predictions and export a new live CUDA run as a ZIP.
 
@@ -61,6 +63,7 @@ def export_live_experiment(
         "model_revision": summary["model_revision"],
         "method": "QLoRA" if summary["loaded_in_4bit"] else "LoRA",
         "quantization": "nf4_4bit" if summary["loaded_in_4bit"] else "none",
+        "inference_batch_statistics": inference_batch_statistics,
         "adapter_dtypes": summary["trainable_parameter_dtypes"],
         "hardware": summary["hardware"],
         "seed": summary["seed"],
@@ -78,6 +81,7 @@ def export_live_experiment(
         "prompt_id": "p1_guidelines", "n_shots": 0,
         "generation": {"max_new_tokens": 128, "do_sample": False, "add_special_tokens": False,
                        "batch_size": inference_batch_size,
+                       "group_by_length": inference_group_by_length,
                        "latency_semantics": "amortized batch wall time per document" if inference_batch_size > 1 else "per-document wall time"},
         "gold_typo_patches": gold_typo_patches,
         "evaluation_selection": "first documents in canonical source order, fixed before training",

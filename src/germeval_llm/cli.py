@@ -14,6 +14,8 @@ from germeval_llm.convert import (
 from germeval_llm.evaluation import evaluate_task_c_predictions, evaluate_task_d_predictions
 from germeval_llm.inference import (
     build_hf_generator_fn,
+    build_hf_batch_generator_fn,
+    resolve_inference_batch_size,
     detect_compute_device,
     load_gemma_model_and_tokenizer,
     load_predictions_jsonl,
@@ -55,10 +57,29 @@ def _cmd_prompt(args: argparse.Namespace) -> None:
 
     model, tokenizer = load_gemma_model_and_tokenizer(
         model_id=args.model_id,
+        revision=args.model_revision,
         adapter_path=args.adapter_path,
         load_in_4bit=args.load_in_4bit,
     )
     gen_fn = build_hf_generator_fn(model, tokenizer, max_new_tokens=args.max_new_tokens)
+    from germeval_llm.inference_checkpoint import model_inference_settings
+    from germeval_llm.progress import ProgressReporter, status
+
+    batch_size = resolve_inference_batch_size(detect_compute_device(), args.batch_size)
+    batch_gen_fn = build_hf_batch_generator_fn(model, tokenizer, max_new_tokens=args.max_new_tokens,
+                                              status_callback=status)
+    settings = model_inference_settings(model, tokenizer, args.max_new_tokens,
+                                        args.model_revision, args.adapter_path)
+    settings["seed"] = args.seed
+    checkpoint = None if args.no_checkpoint else (args.checkpoint_path or
+        f"results/recorded_runs/inference/{args.run_id}_{args.split}.checkpoint.json")
+    if checkpoint:
+        status(f'Inference checkpoint: {checkpoint}; matching completed documents will be reused.')
+    robust_options = dict(generate_batch_fn=batch_gen_fn, batch_size=batch_size,
+                          progress_callback=ProgressReporter(f'Task {args.task} documents'),
+                          checkpoint_path=checkpoint, checkpoint_settings=settings,
+                          group_by_length=not args.no_length_grouping)
+
 
     if args.task == "C":
         preds = run_task_c_inference_with_generator(
@@ -68,6 +89,7 @@ def _cmd_prompt(args: argparse.Namespace) -> None:
             generate_fn=gen_fn,
             prompt_key=args.prompt_key,
             few_shot_examples=few_shots,
+            **robust_options,
         )
         out_pred = save_predictions_jsonl(preds, f"results/predictions/{args.run_id}_{args.split}.jsonl")
         metrics = evaluate_task_c_predictions(docs, preds)
@@ -79,6 +101,7 @@ def _cmd_prompt(args: argparse.Namespace) -> None:
             generate_fn=gen_fn,
             prompt_key=args.prompt_key,
             few_shot_examples=few_shots,
+            **robust_options,
         )
         out_pred = save_predictions_jsonl(preds, f"results/predictions/{args.run_id}_{args.split}.jsonl")
         metrics = evaluate_task_d_predictions(docs, preds)
@@ -102,6 +125,12 @@ def _cmd_prompt(args: argparse.Namespace) -> None:
             "adapter_path": args.adapter_path,
             "requested_load_in_4bit": args.load_in_4bit,
             "loaded_in_4bit": bool(getattr(model, "is_loaded_in_4bit", False)),
+            "model_revision": settings["model_revision"],
+            "inference_settings": settings,
+            "inference_batch_size": batch_size,
+            "inference_batch_statistics": batch_gen_fn.batch_statistics,
+            "checkpoint_path": checkpoint,
+            "group_by_length": not args.no_length_grouping,
             "max_new_tokens": args.max_new_tokens,
             "do_sample": False,
             "hardware": detect_compute_device(),
@@ -154,6 +183,11 @@ def main() -> None:
     p_prompt.add_argument("--task", choices=["C", "D"], default="C")
     p_prompt.add_argument("--split", choices=["dev", "test_syn", "test_dia"], default="dev")
     p_prompt.add_argument("--model-id", default="google/gemma-2-2b-it")
+    p_prompt.add_argument("--model-revision", default="main", help="Pinned model revision recommended")
+    p_prompt.add_argument("--batch-size", type=int, default=None, help="Auto: 2 on <=16-GB CUDA, 8 on larger GPUs")
+    p_prompt.add_argument("--checkpoint-path", default=None, help="Defaults to an ignored per-run checkpoint; rerun to resume")
+    p_prompt.add_argument("--no-checkpoint", action="store_true", help="Disable saving/resuming intermediate predictions")
+    p_prompt.add_argument("--no-length-grouping", action="store_true", help="Generate in source order instead of similar-length batches")
     p_prompt.add_argument("--adapter-path", default=None)
     p_prompt.add_argument("--load-in-4bit", action="store_true")
     p_prompt.add_argument("--prompt-key", default=None, help="Defaults to p1_guidelines for C, d1_guidelines for D")

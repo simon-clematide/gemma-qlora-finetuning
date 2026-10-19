@@ -18,14 +18,17 @@ class ProgressReporter:
         self.report = report
         self.last_elapsed = -30.0
         self.last_completed = None
+        self.initial_completed = None
 
     def __call__(self, completed: int, total: int, elapsed: float) -> None:
-        if completed not in (0, total) and self.last_completed not in (None, 0) and elapsed - self.last_elapsed < 30:
+        if self.initial_completed is None:
+            self.initial_completed = completed if elapsed == 0 else 0
+        if completed not in (0, total) and self.last_completed not in (None, self.initial_completed) and elapsed - self.last_elapsed < 30:
             return
         self.last_elapsed = elapsed
         self.last_completed = completed
-        rate = completed / elapsed if elapsed > 0 else 0
-        eta = f'{(total - completed) / rate / 60:.1f} min' if rate else 'estimating'
+        rate = (completed - self.initial_completed) / elapsed if elapsed > 0 else 0
+        eta = '0.0 min' if completed == total else (f'{(total - completed) / rate / 60:.1f} min' if rate else 'estimating')
         self.report(f'{self.label}: {completed:,}/{total:,}; elapsed {elapsed / 60:.1f} min; ETA {eta}')
 
 

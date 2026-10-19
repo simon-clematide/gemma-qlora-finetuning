@@ -78,17 +78,32 @@ def test_task_d_cli_passes_demonstrations_to_generator(tmp_path, monkeypatch):
         return '{"targets": []}', 1, 1, 1.0
 
     monkeypatch.setattr(cli, "build_hf_generator_fn", lambda *a, **k: generate)
+
+    def batch_factory(*args, **kwargs):
+        def batch(prompts):
+            return [generate(prompt) for prompt in prompts]
+        batch.validate_prompts = lambda prompts: [len(prompt) for prompt in prompts]
+        batch.batch_statistics = {}
+        return batch
+
+    monkeypatch.setattr(cli, 'build_hf_batch_generator_fn', batch_factory)
+    import germeval_llm.inference_checkpoint as checkpoint
+    monkeypatch.setattr(checkpoint, 'model_inference_settings', lambda *a: {'model_revision': 'test'})
+
     # Prompt configuration paths are relative to the repository root.
     from germeval_llm import inference
     from germeval_llm.prompts import load_prompts_config
     config = load_prompts_config(Path(__file__).resolve().parents[1] / "configs/prompts.yaml")
     monkeypatch.setattr(inference, "load_prompts_config", lambda: config)
-    cli._cmd_prompt(argparse.Namespace(
+    arguments = argparse.Namespace(
         split="dev", max_docs=None, task="D", n_shots=5,
         shot_strategy="stratified_diverse", seed=42, model_id="mock",
         adapter_path=None, load_in_4bit=False, max_new_tokens=32,
-        run_id="d1", prompt_key=None,
-    ))
+        run_id="d1", prompt_key=None, model_revision="test", batch_size=2,
+        checkpoint_path=None, no_checkpoint=False, no_length_grouping=False,
+    )
+    cli._cmd_prompt(arguments)
+    cli._cmd_prompt(arguments)  # A second invocation reuses the verified checkpoint.
     assert len(prompts) == 1
     assert prompts[0].count('"target": "Zug"') == 5
     assert Path("results/predictions/d1_dev.jsonl").exists()
@@ -98,6 +113,7 @@ def test_task_d_cli_passes_demonstrations_to_generator(tmp_path, monkeypatch):
     assert manifest["n_shots"] == 5
     assert manifest["demonstration_doc_ids"] == [ex.doc_id for ex in select_few_shot_examples_task_d(examples, 5)]
     assert manifest["evaluation_doc_ids"] == ["doc"]
+    assert manifest["inference_batch_statistics"]["resumed_documents"] == 1
 
 
 def test_simulations_are_isolated_and_reproducible(tmp_path, monkeypatch):

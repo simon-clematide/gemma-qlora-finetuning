@@ -54,12 +54,14 @@ def test_live_export_round_trip_and_provenance(tmp_path):
         export_live_experiment(**dict(args, baseline_predictions=[]))
     with pytest.raises(ValueError, match="measured CUDA"):
         export_live_experiment(**dict(args, training_summary=dict(summary, device="mps")))
-    second = export_live_experiment(**dict(args, training_summary=dict(summary, loaded_in_4bit=False), sampling_strategy="all", inference_batch_size=8))
+    second = export_live_experiment(**dict(args, training_summary=dict(summary, loaded_in_4bit=False), sampling_strategy="all", inference_batch_size=8,
+                                                inference_batch_statistics={"baseline": {"oom_retries": 1}}))
     assert second != archive
     second_manifest = verify_export_bundle(second.with_suffix(""))
     assert second_manifest["quantization"] == "none"
     assert second_manifest["sampling_strategy"] == "all"
     assert second_manifest["generation"]["batch_size"] == 8
+    assert second_manifest["inference_batch_statistics"] == {"baseline": {"oom_retries": 1}}
     assert second_manifest["generation"]["latency_semantics"] == "amortized batch wall time per document"
 
 
@@ -80,5 +82,6 @@ def test_notebook_export_skips_replay_and_downloads_live(monkeypatch, tmp_path):
     colab.files.download = lambda name: calls.append(name)
     monkeypatch.setitem(sys.modules, "google.colab", colab)
     exec(source, dict(RUN_LIVE_GPU=True, sys=sys, eval_docs=[], baseline_preds=[], ft_preds=[],
-                     train_summary={}, TRAIN_CONFIG="config", INFERENCE_BATCH_SIZE=8, exp_manifest={"gold_typo_patches": False}))
+                     train_summary={}, TRAIN_CONFIG="config", ACTIVE_INFERENCE_BATCH_SIZE=8, INFERENCE_BATCH_STATS={}, exp_manifest={"gold_typo_patches": False}))
     assert calls[-1] == str(archive)
+    assert calls[0]["inference_group_by_length"] is True

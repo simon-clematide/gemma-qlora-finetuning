@@ -171,10 +171,23 @@ def build_hf_generator_fn(
     return _generate
 
 
+def resolve_inference_batch_size(hardware: dict[str, Any], requested: int | None = None) -> int:
+    """Use a conservative default for 16-GiB CUDA runtimes; allow explicit overrides."""
+    if requested is not None:
+        if not isinstance(requested, int) or isinstance(requested, bool) or requested < 1:
+            raise ValueError("Inference batch size must be a positive integer or None (auto)")
+        return requested
+    if not hardware.get("cuda_available"):
+        return 1
+    vram = hardware.get("gpu_vram_gb")
+    return 2 if vram is None or vram <= 16 else 8
+
+
 def build_hf_batch_generator_fn(
     model: Any,
     tokenizer: Any,
     max_new_tokens: int = 256,
+    status_callback: Callable[[str], None] | None = None,
 ) -> Callable[[list[str]], list[tuple[str, int, int, float]]]:
     """Generate left-padded batches; latency is amortized batch wall time per document.
 
@@ -189,18 +202,48 @@ def build_hf_batch_generator_fn(
     if isinstance(eot_id, int) and eot_id != tokenizer.unk_token_id and eot_id not in eos_ids:
         eos_ids.append(eot_id)
 
-    def _generate(prompts: list[str]) -> list[tuple[str, int, int, float]]:
+    config = getattr(model, "config", None)
+    if config is not None and hasattr(config, "get_text_config"):
+        config = config.get_text_config()
+    limits = [getattr(config, "max_position_embeddings", None), getattr(tokenizer, "model_max_length", None)]
+    context_limit = min((n for n in limits if isinstance(n, int) and 0 < n < 10**9), default=None)
+
+    def check_length(length: int, index: int) -> None:
+        if context_limit is not None and length + max_new_tokens > context_limit:
+            raise ValueError(
+                f"Inference prompt {index} needs {length} input tokens + {max_new_tokens} output tokens, "
+                f"exceeding model context {context_limit}. Reduce the fixed few-shot count or use a "
+                "larger-context model; no input or demonstrations were truncated."
+            )
+
+    def validate_prompts(prompts: list[str]) -> list[int]:
+        if status_callback:
+            status_callback(f"Checking token lengths for {len(prompts):,} pending inference prompts...")
+        lengths = []
+        for index, prompt in enumerate(prompts):
+            length = len(tokenizer.encode(prompt, add_special_tokens=False))
+            check_length(length, index)
+            lengths.append(length)
+        if lengths and status_callback:
+            status_callback(f"Prompt length check passed: max={max(lengths):,}, "
+                            f"output budget={max_new_tokens}, context={context_limit or 'unspecified'}.")
+        return lengths
+
+    def _attempt(prompts: list[str]) -> list[tuple[str, int, int, float]]:
         if not prompts:
             return []
         t0 = time.perf_counter()
         previous_padding = tokenizer.padding_side
         try:
             tokenizer.padding_side = "left"
-            inputs = tokenizer(prompts, padding=True, return_tensors="pt", add_special_tokens=False).to(device)
+            inputs = tokenizer(prompts, padding=True, return_tensors="pt", add_special_tokens=False)
         finally:
             tokenizer.padding_side = previous_padding
         width = int(inputs["input_ids"].shape[1])
         prompt_lengths = inputs["attention_mask"].sum(dim=1).tolist()
+        for index, length in enumerate(prompt_lengths):
+            check_length(int(length), index)
+        inputs = inputs.to(device)
         with torch.no_grad():
             outputs = model.generate(
                 **inputs, max_new_tokens=max_new_tokens, do_sample=False,
@@ -215,119 +258,190 @@ def build_hf_batch_generator_fn(
         return [(text.strip(), int(length), len(tokens), elapsed)
                 for text, length, tokens in zip(texts, prompt_lengths, completions, strict=True)]
 
+    statistics: dict[str, Any] = {
+        "oom_retries": 0, "oom_events": 0, "cache_clear_retries": 0,
+        "batch_reductions": 0, "successful_batch_sizes": {}, "completed_documents": 0,
+    }
+    adaptive_limit: int | None = None
+
+    def _generate(prompts: list[str]) -> list[tuple[str, int, int, float]]:
+        import gc
+
+        nonlocal adaptive_limit
+        started = time.perf_counter()
+        results = []
+        offset = 0
+        cache_retry_used = False
+        while offset < len(prompts):
+            size = min(adaptive_limit or len(prompts), len(prompts) - offset)
+            retry = False
+            try:
+                chunk = _attempt(prompts[offset:offset + size])
+            except torch.cuda.OutOfMemoryError:
+                retry = True
+            # Retry outside the exception handler: its traceback holds live tensors.
+            if retry:
+                gc.collect()
+                torch.cuda.empty_cache()
+                statistics["oom_events"] += 1
+                if not cache_retry_used:
+                    cache_retry_used = True
+                    statistics["cache_clear_retries"] += 1
+                    if status_callback:
+                        status_callback(f"CUDA memory exhausted for inference batch {size}; "
+                                        "unused cache cleared, retrying the same batch once.")
+                else:
+                    if size == 1:
+                        raise torch.cuda.OutOfMemoryError(
+                            "Inference cannot fit even one document after clearing unused CUDA cache. "
+                            "No documents were skipped. Free other GPU workloads or restart the runtime "
+                            "and use 4-bit loading/a GPU with more memory."
+                        ) from None
+                    adaptive_limit = max(1, size // 2)
+                    cache_retry_used = False
+                    statistics["batch_reductions"] += 1
+                    statistics["adaptive_batch_limit"] = adaptive_limit
+                    if status_callback:
+                        status_callback(f"Inference batch {size} still exceeds CUDA memory; "
+                                        f"retrying the same documents in batches of {adaptive_limit}.")
+                statistics["oom_retries"] += 1
+                continue
+            results.extend(chunk)
+            cache_retry_used = False
+            offset += size
+            key = str(size)
+            counts = statistics["successful_batch_sizes"]
+            counts[key] = counts.get(key, 0) + 1
+            statistics["completed_documents"] += size
+        elapsed = (time.perf_counter() - started) * 1000 / len(prompts) if prompts else 0.0
+        return [(text, p_tokens, c_tokens, elapsed) for text, p_tokens, c_tokens, _ in results]
+
+    # Capture actual sub-batches, including OOM fallback, in the experiment export.
+    _generate.batch_statistics = statistics
+    _generate.validate_prompts = validate_prompts
     return _generate
 
 
-def run_task_c_inference_with_generator(
-    canonical_docs: Sequence[CanonicalDocument],
-    run_id: str,
-    split: str,
-    generate_fn: Callable[[str], tuple[str, int, int, float]],
-    prompt_key: str = "p1_guidelines",
-    few_shot_examples: list[TaskCExample] | None = None,
-    generate_batch_fn: Callable[[list[str]], list[tuple[str, int, int, float]]] | None = None,
-    batch_size: int = 1,
-    progress_callback: Callable[[int, int, float], None] | None = None,
+def _run_inference_with_generator(
+    canonical_docs: Sequence[CanonicalDocument], run_id: str, split: str,
+    generate_fn: Callable[[str], tuple[str, int, int, float]], task: str, prompt_key: str,
+    few_shot_examples: Sequence[Any] | None,
+    generate_batch_fn: Callable[[list[str]], list[tuple[str, int, int, float]]] | None,
+    batch_size: int, progress_callback: Callable[[int, int, float], None] | None,
+    checkpoint_path: str | Path | None, checkpoint_settings: dict[str, Any] | None,
+    group_by_length: bool,
 ) -> list[PredictionRecord]:
-    """Run Task C inference over a split using a provided `generate_fn(formatted_prompt) -> (raw_text, p_toks, c_toks, ms)`."""
+    from germeval_llm.inference_checkpoint import InferenceCheckpoint
+
     if batch_size < 1:
         raise ValueError("batch_size must be positive")
+    if len({doc.doc_id for doc in canonical_docs}) != len(canonical_docs):
+        raise ValueError("Inference requires unique document IDs")
+    if any(doc.source_split != split for doc in canonical_docs):
+        raise ValueError("Inference document split mismatch")
+    if any(example.source_split != "train" for example in few_shot_examples or []):
+        raise ValueError("Few-shot demonstrations must come from the training split")
     prompts_cfg = load_prompts_config()
-    records: list[PredictionRecord] = []
+    render = render_task_c_user_prompt if task == "C" else render_task_d_user_prompt
+    prompts = [format_gemma_chat_string([ChatMessage(role="user", content=render(
+        doc.text, prompt_key=prompt_key, few_shot_examples=few_shot_examples, prompts_cfg=prompts_cfg,
+    ))]) for doc in canonical_docs]
+    checkpoint = None
+    records: dict[int, PredictionRecord] = {}
+    if checkpoint_path is not None:
+        if not checkpoint_settings:
+            raise ValueError("Checkpointing requires explicit model/generation settings")
+        checkpoint = InferenceCheckpoint(checkpoint_path, {
+            "task": task, "run_id": run_id, "split": split, "settings": checkpoint_settings,
+            "batch_size": batch_size, "group_by_length": group_by_length,
+            "documents": [doc.model_dump(mode="json") for doc in canonical_docs],
+            "prompts": prompts,
+            "demonstrations": [ex.model_dump(mode="json") for ex in few_shot_examples or []],
+        })
+        records = checkpoint.load(canonical_docs, task, split, run_id)
+    statistics = getattr(generate_batch_fn, "batch_statistics", None)
+    if statistics is not None:
+        statistics["resumed_documents"] = len(records)
+        statistics["total_documents"] = len(canonical_docs)
+        statistics["group_by_length"] = group_by_length
+    pending = [i for i in range(len(canonical_docs)) if i not in records]
+    if pending:
+        validator = getattr(generate_batch_fn, "validate_prompts", None)
+        if validator is not None:
+            lengths = validator([prompts[i] for i in pending])
+        elif group_by_length:
+            raise ValueError("Length grouping requires a generator with exact prompt-length validation")
+        if group_by_length:
+            pending = [index for _, index in sorted(zip(lengths, pending, strict=True))]
     started = time.perf_counter()
     if progress_callback:
-        progress_callback(0, len(canonical_docs), 0.0)
-
-    def format_prompt(doc: CanonicalDocument) -> str:
-        user_prompt = render_task_c_user_prompt(
-            doc.text, prompt_key=prompt_key, few_shot_examples=few_shot_examples,
-            prompts_cfg=prompts_cfg,
-        )
-        return format_gemma_chat_string([ChatMessage(role="user", content=user_prompt)])
-
-    for start in range(0, len(canonical_docs), batch_size):
-        docs = canonical_docs[start:start + batch_size]
-        prompts = [format_prompt(doc) for doc in docs]
+        progress_callback(len(records), len(canonical_docs), 0.0)
+    for start in range(0, len(pending), batch_size):
+        indices = pending[start:start + batch_size]
+        batch_prompts = [prompts[index] for index in indices]
         if generate_batch_fn is not None:
-            results = generate_batch_fn(prompts)
+            results = generate_batch_fn(batch_prompts)
         else:
             results = []
-            for prompt in prompts:
+            for prompt in batch_prompts:
                 t0 = time.perf_counter()
                 raw, p_tokens, c_tokens, ms = generate_fn(prompt)
                 if ms <= 0:
                     ms = (time.perf_counter() - t0) * 1000.0
                 results.append((raw, p_tokens, c_tokens, ms))
-        if len(results) != len(docs):
+        if len(results) != len(indices):
             raise ValueError("Generator returned a different number of predictions than documents")
-        for doc, (raw_out, p_toks, c_toks, gen_ms) in zip(docs, results, strict=True):
-            elapsed_ms = gen_ms
-            parsed_labels, status, errors = parse_task_c_output(raw_out)
-            records.append(
-                PredictionRecord(
-                    run_id=run_id,
-                    task="C",
-                    split=split,
-                    doc_id=doc.doc_id,
-                    source_ordinal=doc.source_ordinal,
-                    raw_output=raw_out,
-                    parse_status=status,
-                    parse_errors=errors,
-                    parsed_labels=parsed_labels,
-                    prompt_tokens=p_toks,
-                    completion_tokens=c_toks,
-                    latency_ms=round(elapsed_ms, 3),
-                )
+        for index, (raw_out, p_toks, c_toks, gen_ms) in zip(indices, results, strict=True):
+            doc = canonical_docs[index]
+            parsed, status, errors = (parse_task_c_output(raw_out) if task == "C" else parse_task_d_output(raw_out))
+            fields = ({"parsed_labels": parsed} if task == "C" else {
+                "parsed_targets": parsed, "aligned_spans": align_targets_to_text(doc.text, parsed),
+            })
+            records[index] = PredictionRecord(
+                run_id=run_id, task=task, split=split, doc_id=doc.doc_id,
+                source_ordinal=doc.source_ordinal, raw_output=raw_out,
+                parse_status=status, parse_errors=errors, prompt_tokens=p_toks,
+                completion_tokens=c_toks, latency_ms=round(gen_ms, 3), **fields,
             )
+        if checkpoint is not None:
+            checkpoint.save(records)
         if progress_callback:
             progress_callback(len(records), len(canonical_docs), time.perf_counter() - started)
-    return records
+    return [records[i] for i in range(len(canonical_docs))]
+
+
+def run_task_c_inference_with_generator(
+    canonical_docs: Sequence[CanonicalDocument], run_id: str, split: str,
+    generate_fn: Callable[[str], tuple[str, int, int, float]],
+    prompt_key: str = "p1_guidelines", few_shot_examples: list[TaskCExample] | None = None,
+    generate_batch_fn: Callable[[list[str]], list[tuple[str, int, int, float]]] | None = None,
+    batch_size: int = 1,
+    progress_callback: Callable[[int, int, float], None] | None = None,
+    checkpoint_path: str | Path | None = None, checkpoint_settings: dict[str, Any] | None = None,
+    group_by_length: bool = False,
+) -> list[PredictionRecord]:
+    """Task C prompting, optionally batched, length-grouped, and resumable."""
+    return _run_inference_with_generator(
+        canonical_docs, run_id, split, generate_fn, "C", prompt_key, few_shot_examples,
+        generate_batch_fn, batch_size, progress_callback, checkpoint_path, checkpoint_settings, group_by_length,
+    )
 
 
 def run_task_d_inference_with_generator(
-    canonical_docs: Sequence[CanonicalDocument],
-    run_id: str,
-    split: str,
+    canonical_docs: Sequence[CanonicalDocument], run_id: str, split: str,
     generate_fn: Callable[[str], tuple[str, int, int, float]],
-    prompt_key: str = "d1_guidelines",
-    few_shot_examples: list[TaskDExample] | None = None,
+    prompt_key: str = "d1_guidelines", few_shot_examples: list[TaskDExample] | None = None,
+    generate_batch_fn: Callable[[list[str]], list[tuple[str, int, int, float]]] | None = None,
+    batch_size: int = 1,
+    progress_callback: Callable[[int, int, float], None] | None = None,
+    checkpoint_path: str | Path | None = None, checkpoint_settings: dict[str, Any] | None = None,
+    group_by_length: bool = False,
 ) -> list[PredictionRecord]:
-    """Run Task D target-string inference and deterministic post-processing alignment."""
-    prompts_cfg = load_prompts_config()
-    records: list[PredictionRecord] = []
-
-    for doc in canonical_docs:
-        user_prompt = render_task_d_user_prompt(
-            doc.text,
-            prompt_key=prompt_key,
-            few_shot_examples=few_shot_examples,
-            prompts_cfg=prompts_cfg,
-        )
-        formatted = format_gemma_chat_string([ChatMessage(role="user", content=user_prompt)])
-        t0 = time.perf_counter()
-        raw_out, p_toks, c_toks, gen_ms = generate_fn(formatted)
-        elapsed_ms = gen_ms if gen_ms > 0 else (time.perf_counter() - t0) * 1000.0
-
-        parsed_targets, status, errors = parse_task_d_output(raw_out)
-        aligned_spans = align_targets_to_text(doc.text, parsed_targets)
-        records.append(
-            PredictionRecord(
-                run_id=run_id,
-                task="D",
-                split=split,
-                doc_id=doc.doc_id,
-                source_ordinal=doc.source_ordinal,
-                raw_output=raw_out,
-                parse_status=status,
-                parse_errors=errors,
-                parsed_targets=parsed_targets,
-                aligned_spans=aligned_spans,
-                prompt_tokens=p_toks,
-                completion_tokens=c_toks,
-                latency_ms=round(elapsed_ms, 3),
-            )
-        )
-    return records
+    """Task D prompting with the same batching, resume, and safety contracts as Task C."""
+    return _run_inference_with_generator(
+        canonical_docs, run_id, split, generate_fn, "D", prompt_key, few_shot_examples,
+        generate_batch_fn, batch_size, progress_callback, checkpoint_path, checkpoint_settings, group_by_length,
+    )
 
 
 def save_predictions_jsonl(records: Sequence[PredictionRecord], out_path: str | Path) -> Path:
