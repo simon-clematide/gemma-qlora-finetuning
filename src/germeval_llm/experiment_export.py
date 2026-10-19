@@ -73,6 +73,7 @@ def export_live_experiment(
         "sampling_strategy": sampling_strategy,
         "max_steps": settings["global_step"],
         "max_seq_length": settings["max_length"],
+        "sequence_length_audit": summary.get("sequence_length_audit"),
         "effective_batch_size": settings["effective_batch_size"],
         "prompt_id": "p1_guidelines", "n_shots": 0,
         "generation": {"max_new_tokens": 128, "do_sample": False, "add_special_tokens": False,

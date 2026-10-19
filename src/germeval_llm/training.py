@@ -25,6 +25,58 @@ def load_training_config(config_path: str | Path) -> dict[str, Any]:
         return yaml.safe_load(f)
 
 
+def audit_training_sequence_lengths(
+    datasets: dict[str, Any], tokenizer: Any, max_length: int,
+    status_callback: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """Measure complete rendered prompt/completion sequences before loading weights.
+
+    Match SFTTrainer's EOS append and default tokenizer special-token processing.
+    The later post-tokenization audit still checks the trainer's actual output.
+    """
+    if max_length < 1:
+        raise ValueError("max_seq_length must be positive")
+    report = status_callback or (lambda message: None)
+    audit: dict[str, Any] = {"chosen_limit": max_length, "includes_eos": True, "splits": {}}
+    exceeded: list[tuple[str, str, int]] = []
+    for split, rows in datasets.items():
+        lengths: list[int] = []
+        for index, row in enumerate(rows, 1):
+            completion = row["completion"]
+            if not completion.endswith(tokenizer.eos_token):
+                completion += tokenizer.eos_token
+            length = len(tokenizer.encode(row["prompt"] + completion))
+            lengths.append(length)
+            if length > max_length:
+                exceeded.append((split, row["doc_id"], length))
+            if index % 1000 == 0 or index == len(rows):
+                report(f"Sequence length scan ({split}): {index:,}/{len(rows):,}")
+        if not lengths:
+            raise ValueError(f"Sequence length scan: no {split} examples")
+        ordered = sorted(lengths)
+        stats = {
+            "num_examples": len(lengths),
+            "median": ordered[math.ceil(len(lengths) * 0.5) - 1],
+            "p95": ordered[math.ceil(len(lengths) * 0.95) - 1],
+            "p99": ordered[math.ceil(len(lengths) * 0.99) - 1],
+            "max": ordered[-1],
+            "exceeding_limit": sum(length > max_length for length in lengths),
+        }
+        audit["splits"][split] = stats
+        report(f"Sequence lengths ({split}): median={stats['median']}, p99={stats['p99']}, "
+               f"max={stats['max']}; limit={max_length}, exceeding={stats['exceeding_limit']}")
+    audit["measured_max"] = max(stats["max"] for stats in audit["splits"].values())
+    if exceeded:
+        suggested = math.ceil(audit["measured_max"] / 128) * 128
+        raise ValueError(
+            f"Sequence length preflight: {len(exceeded)} examples exceed max_seq_length={max_length}; "
+            f"measured maximum={audit['measured_max']}. Set training.max_seq_length to at least "
+            f"{audit['measured_max']} (suggested {suggested}). No model weights have been loaded. "
+            f"First affected examples (split, ID, tokens): {exceeded[:3]}"
+        )
+    return audit
+
+
 def resolve_training_batch_sizes(
     training_config: dict[str, Any], *, is_t4_class_gpu: bool,
 ) -> tuple[int, int]:
@@ -265,11 +317,16 @@ def run_sft_adapter_training(
     hw = detect_compute_device()
     compute_dtype = torch.bfloat16 if hw["bf16_supported"] else torch.float16
 
-    report("Loading training tokenizer and model weights...")
+    report("Loading tokenizer for sequence length preflight (before model weights)...")
     tokenizer = AutoTokenizer.from_pretrained(model_id, revision=model_revision)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
+    sequence_length_audit = audit_training_sequence_lengths(
+        {"train": hf_train, "dev": hf_dev}, tokenizer,
+        max_length=int(tcfg.get("max_seq_length", 1024)), status_callback=status_callback,
+    )
+    report("Sequence length preflight passed; loading training model weights...")
 
     load_in_4bit = bool(cfg.get("load_in_4bit", False)) and hw["cuda_available"]
     is_t4_class_gpu = hw["cuda_available"] and (not hw["bf16_supported"])
@@ -460,6 +517,7 @@ def run_sft_adapter_training(
         "model_revision": model_revision,
         "hardware": hw,
         "loaded_in_4bit": load_in_4bit,
+        "sequence_length_audit": sequence_length_audit,
         "parameter_dtypes": sorted({str(p.dtype) for p in model.parameters()}),
         "trainable_parameter_dtypes": sorted({str(p.dtype) for p in model.parameters() if p.requires_grad}),
         "training_doc_ids": [r["doc_id"] for r in raw_train_rows],

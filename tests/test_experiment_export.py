@@ -20,6 +20,7 @@ def test_live_export_round_trip_and_provenance(tmp_path):
                             parse_status="VALID_EXACT")
     summary = {
         "device": "cuda", "hardware": {"device": "cuda", "gpu_name": "test GPU"},
+        "sequence_length_audit": {"chosen_limit": 512, "measured_max": 500},
         "loaded_in_4bit": True, "base_model_id": "test-model", "model_revision": "test-revision",
         "trainable_parameter_dtypes": ["torch.float32"], "seed": 7,
         "tokenized_training_doc_ids": ["train-only"], "tokenized_validation_doc_ids": ["dev-only"],
@@ -35,6 +36,7 @@ def test_live_export_round_trip_and_provenance(tmp_path):
     bundle = tmp_path / "imported" / archive.stem
     manifest = verify_export_bundle(bundle)
     assert manifest["execution_mode"] == "live"
+    assert manifest["sequence_length_audit"] == summary["sequence_length_audit"]
     assert manifest["hardware"]["gpu_name"] == "test GPU"
     assert manifest["quantization"] == "nf4_4bit"
     assert manifest["training_doc_ids"] == ["train-only"]

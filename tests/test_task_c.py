@@ -485,6 +485,7 @@ def test_demo_full_profile_uses_all_training_and_test_syn_documents() -> None:
         assert scope['MAX_TRAIN_STEPS'] == steps
         if live and profile == 'full':
             assert scope['exp_manifest']['sampling_strategy'] == 'all'
+            assert scope['exp_manifest']['max_seq_length'] == 1280
             verify_experiment_manifest(scope['exp_manifest'], 'test_syn', 'p1_guidelines',
                                        expected_eval_docs=test_docs)
     assert recording == load_replay_manifest()

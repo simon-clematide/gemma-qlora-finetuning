@@ -11,14 +11,16 @@ from germeval_llm import training
 
 
 @pytest.mark.parametrize("revision", [None, "frozen-model-commit"])
-def test_training_pins_tokenizer_and_model_revision(tmp_path, monkeypatch, revision):
+@pytest.mark.parametrize("limit,should_fit", [(1024, True), (1, False)])
+def test_training_pins_tokenizer_and_model_revision(tmp_path, monkeypatch, revision, limit, should_fit):
     monkeypatch.setattr(training, "_patch_optional_peft_dependency_checks", lambda: None)
     from germeval_llm import inference
     monkeypatch.setattr(inference, "detect_compute_device", lambda: {
         "bf16_supported": False, "cuda_available": False, "device": "cpu",
     })
     calls = []
-    tokenizer = SimpleNamespace(pad_token="pad", padding_side="right")
+    tokenizer = SimpleNamespace(pad_token="pad", padding_side="right", eos_token="<eos>",
+                                encode=lambda text: list(range(len(text))))
 
     class StopBeforeWeights(Exception):
         pass
@@ -37,7 +39,7 @@ def test_training_pins_tokenizer_and_model_revision(tmp_path, monkeypatch, revis
 
     stubs = {
         "torch": {"manual_seed": lambda _: None, "bfloat16": "bf16", "float16": "fp16", "float32": "fp32"},
-        "datasets": {"Dataset": SimpleNamespace(from_dict=lambda rows: rows)},
+        "datasets": {"Dataset": SimpleNamespace(from_dict=lambda columns: [dict(zip(columns, values)) for values in zip(*columns.values())])},
         "peft": {"get_peft_model": None, "prepare_model_for_kbit_training": None},
         "transformers": {"AutoModelForCausalLM": AutoModel, "AutoTokenizer": AutoTokenizer},
         "trl": {"SFTConfig": None, "SFTTrainer": None},
@@ -46,7 +48,7 @@ def test_training_pins_tokenizer_and_model_revision(tmp_path, monkeypatch, revis
         stub = types.ModuleType(name)
         stub.__dict__.update(attributes)
         monkeypatch.setitem(sys.modules, name, stub)
-    config = {"base_model_id": "test-model", "training": {}}
+    config = {"base_model_id": "test-model", "training": {"max_seq_length": limit}}
     if revision:
         config["model_revision"] = revision
     config_path = tmp_path / "config.yaml"
@@ -56,9 +58,12 @@ def test_training_pins_tokenizer_and_model_revision(tmp_path, monkeypatch, revis
         "doc_id": "train-1", "prompt": [{"role": "user", "content": "Text"}],
         "completion": [{"role": "assistant", "content": '{"labels":[]}'}],
     }) + "\n")
-    with pytest.raises(StopBeforeWeights):
+    expected_error = StopBeforeWeights if should_fit else ValueError
+    with pytest.raises(expected_error) as failure:
         training.run_sft_adapter_training(config_path, data, data, tmp_path / "adapter")
-    assert [call[0] for call in calls] == ["tokenizer", "model"]
+    assert [call[0] for call in calls] == (["tokenizer", "model"] if should_fit else ["tokenizer"])
+    if not should_fit:
+        assert "No model weights have been loaded" in str(failure.value)
     assert all(call[2]["revision"] == (revision or "main") for call in calls)
 
 
