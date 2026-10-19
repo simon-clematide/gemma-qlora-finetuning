@@ -59,6 +59,7 @@ def test_batched_predictions_preserve_order_and_final_partial_batch():
                               text=f'Text {i}', relevance=False, document_sentiment='neutral', opinions=[])
             for i in range(5)]
     calls = []
+    progress = []
 
     def single(prompt):
         raw = 'invalid JSON' if 'Text 1' in prompt else '{"labels": []}'
@@ -70,8 +71,12 @@ def test_batched_predictions_preserve_order_and_final_partial_batch():
 
     sequential = run_task_c_inference_with_generator(docs, 'test', 'test_syn', single)
     batched = run_task_c_inference_with_generator(docs, 'test', 'test_syn', single,
-                                                 generate_batch_fn=batch, batch_size=2)
+                                                 generate_batch_fn=batch, batch_size=2,
+                                                 progress_callback=lambda *event: progress.append(event))
     assert calls == [2, 2, 1]
+    assert [event[0] for event in progress] == [0, 2, 4, 5]
+    assert all(event[1] == 5 for event in progress)
+    assert [event[2] for event in progress] == sorted(event[2] for event in progress)
     assert [p.doc_id for p in batched] == ['0', '1', '2', '3', '4']
     assert batched == sequential
     assert batched[1].raw_output == 'invalid JSON'

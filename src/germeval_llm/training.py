@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 import yaml
 
 
@@ -187,6 +187,7 @@ def run_sft_adapter_training(
     subset_size: int | None = None,
     sampling_strategy: str = "stratified",
     seed_override: int | None = None,
+    status_callback: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     """Execute supervised fine-tuning (LoRA or 4-bit NF4 QLoRA) on Gemma Instruct with completion-only loss masking.
 
@@ -207,6 +208,8 @@ def run_sft_adapter_training(
     from germeval_llm.prompts import format_gemma_chat_string
     from germeval_llm.schemas import ChatMessage, TaskCExample
 
+    report = status_callback or (lambda message: None)
+    report("Preparing training and validation data...")
     cfg = load_training_config(config_path)
     tcfg = cfg["training"]
     seed = int(seed_override if seed_override is not None else tcfg.get("seed", 42))
@@ -262,6 +265,7 @@ def run_sft_adapter_training(
     hw = detect_compute_device()
     compute_dtype = torch.bfloat16 if hw["bf16_supported"] else torch.float16
 
+    report("Loading training tokenizer and model weights...")
     tokenizer = AutoTokenizer.from_pretrained(model_id, revision=model_revision)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -389,6 +393,7 @@ def run_sft_adapter_training(
         report_to="none",
     )
 
+    report(f"Tokenizing {len(raw_train_rows):,} training and {len(hf_dev):,} validation examples...")
     trainer = SFTTrainer(
         model=model,
         processing_class=tokenizer,
@@ -396,6 +401,9 @@ def run_sft_adapter_training(
         eval_dataset=hf_dev,
         args=sft_config,
     )
+    if status_callback is not None:
+        from germeval_llm.progress import training_progress_callback
+        trainer.add_callback(training_progress_callback(status_callback))
     # CRITICAL: trl's SFTTrainer.__init__ (line 911) unconditionally casts all trainable parameters of quantized
     # models to torch.bfloat16 (`if _is_quantized_model: param.data = param.data.to(torch.bfloat16)`), ignoring
     # whether the GPU supports bfloat16. Re-sanitize trainer.model to compute_dtype (float16 on T4) before trainer.train().
@@ -405,6 +413,7 @@ def run_sft_adapter_training(
     # so the recorded training IDs and completion-only masks can be audited.
     from germeval_llm.prompts import compute_completion_only_labels
     marker_ids = tokenizer.encode("<start_of_turn>model\n", add_special_tokens=False)
+    report("Auditing tokenization and completion-only loss masks...")
     for name, prepared in [("train", trainer.train_dataset), ("dev", trainer.eval_dataset)]:
         raw_count = len(raw_train_rows) if name == "train" else len(raw_dev_rows[:dev_cap])
         if len(prepared) != raw_count:
@@ -412,7 +421,9 @@ def run_sft_adapter_training(
                 f"Truncation removed {raw_count - len(prepared)} {name} examples; increase max_seq_length"
             )
         with (out_dir / f"{name}_tokenization.jsonl").open("w", encoding="utf-8") as audit:
-            for row in prepared:
+            for row_number, row in enumerate(prepared, 1):
+                if row_number % 1000 == 0 or row_number == len(prepared):
+                    report(f"Tokenization audit ({name}): {row_number:,}/{len(prepared):,}")
                 full_ids = tokenizer.encode(row["prompt"] + row["completion"])
                 if list(row["input_ids"]) != list(full_ids):
                     raise ValueError(f"Truncated training completion for {row['doc_id']}; increase max_seq_length")
@@ -429,6 +440,7 @@ def run_sft_adapter_training(
     train_res = trainer.train()
     wall_sec = time.perf_counter() - t0
 
+    report("Training finished; saving adapter, tokenizer, and trainer state...")
     model.save_pretrained(str(out_dir))
     tokenizer.save_pretrained(str(out_dir))
     trainer.save_state()

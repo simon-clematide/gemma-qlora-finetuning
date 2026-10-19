@@ -227,12 +227,16 @@ def run_task_c_inference_with_generator(
     few_shot_examples: list[TaskCExample] | None = None,
     generate_batch_fn: Callable[[list[str]], list[tuple[str, int, int, float]]] | None = None,
     batch_size: int = 1,
+    progress_callback: Callable[[int, int, float], None] | None = None,
 ) -> list[PredictionRecord]:
     """Run Task C inference over a split using a provided `generate_fn(formatted_prompt) -> (raw_text, p_toks, c_toks, ms)`."""
     if batch_size < 1:
         raise ValueError("batch_size must be positive")
     prompts_cfg = load_prompts_config()
     records: list[PredictionRecord] = []
+    started = time.perf_counter()
+    if progress_callback:
+        progress_callback(0, len(canonical_docs), 0.0)
 
     def format_prompt(doc: CanonicalDocument) -> str:
         user_prompt = render_task_c_user_prompt(
@@ -275,6 +279,8 @@ def run_task_c_inference_with_generator(
                     latency_ms=round(elapsed_ms, 3),
                 )
             )
+        if progress_callback:
+            progress_callback(len(records), len(canonical_docs), time.perf_counter() - started)
     return records
 
 
